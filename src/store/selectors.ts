@@ -149,10 +149,20 @@ export function useWeightStats(now: Date): WeightStats {
     // 直近14日のうち、食事を記録した日数（記録が足りない週は、提案しない）
     const mealDates = new Set(meals.map((m) => m.date));
     let loggedDays = 0;
-    for (let i = 0; i < 14; i++) if (mealDates.has(dateKey(addDays(now, -i)))) loggedDays++;
+    let intakeSum = 0;
+    for (let i = 0; i < 14; i++) {
+      const key = dateKey(addDays(now, -i));
+      if (mealDates.has(key)) {
+        loggedDays++;
+        intakeSum += meals.filter((m) => m.date === key).reduce((a, m) => a + m.kcal, 0);
+      }
+    }
     // 減量で週の合計を下げられる余地（基礎代謝×7日を下回らない範囲）
     const floor = 7 * Math.max(1200, bmr(profile, avg ?? 70, ageOf(profile.birthYear, now)));
-    const room = weekKcalOf(profile.tdee, profile.pace) + profile.weekAdjustKcal - floor;
+    const weekTotal = weekKcalOf(profile.tdee, profile.pace) + profile.weekAdjustKcal;
+    const room = weekTotal - floor;
+    // 計画どおり食べていたか（記録した日の平均摂取 ÷ 1日の目標）
+    const intakeRatio = loggedDays > 0 ? intakeSum / loggedDays / (weekTotal / 7) : undefined;
     const eta = (p: number) => (avg !== null && goal !== null ? etaLabel(etaTo(avg, goal, p, now, dir)) : null);
     return {
       avg,
@@ -163,7 +173,7 @@ export function useWeightStats(now: Date): WeightStats {
       left: avg !== null && goal !== null ? Math.max(0, dir === 'down' ? avg - goal : goal - avg) : null,
       etaActual: pace !== null ? eta(pace) : null,
       etaPlanned: eta(planned),
-      suggestion: suggestPace({ planned, actual: pace, answeredThisWeek: paceAnswers[weekKey] !== undefined, loggedDays, room }),
+      suggestion: suggestPace({ planned, actual: pace, answeredThisWeek: paceAnswers[weekKey] !== undefined, loggedDays, room, intakeRatio }),
       weekKey,
       paceLine: pace !== null ? `直近2週 ${signed1(pace)}kg/週（予定 ${signed1(planned)}）` : null,
     };

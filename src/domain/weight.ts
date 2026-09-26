@@ -77,6 +77,8 @@ export const PACE_CATCHUP = 0.5;
 export const KCAL_PER_KG_FAT = 7700;
 /** 直近14日のうち、食事を記録した日がこれ未満なら、提案しない（食べた量が分からないので、原因を判断できない） */
 export const PACE_MIN_LOGGED_DAYS = 10;
+/** 計画どおり食べていたか：直近14日の平均摂取 ÷ 目標。減量で1.05を超える（食べ過ぎ）／増量で0.95を下回る（食べ足りない）なら、提案しない */
+export const ADHERENCE_TOLERANCE = 0.05;
 
 export interface PaceSuggestion {
   /** 週の合計に足す量（減量なら −、増量なら +）。100kcal単位 */
@@ -95,15 +97,17 @@ export function suggestedStep(shortfallKgPerWeek: number): number {
  * 7日平均の2週間の動きが、予定のペースより 0.1kg/週 以上遅いとき（増量のときは逆）に、週の合計の見直しを提案する。
  * - 提案の量は、遅れが大きいほど多い（300〜1,400kcal/週）
  * - 直近14日の食事の記録が10日未満なら出さない
+ * - 計画どおり食べていないとき（減量で食べ過ぎ・増量で食べ足りない）は出さない。原因が食事なので、目標を動かしても意味がない
  * - 減量で、週の合計が下限（基礎代謝×7日）を割るほどの提案はしない（room = 下げられる余地）
  * - 勝手には変えない。同じ週に答え済みなら出さない
  * @param planned 予定のペース（kg/週。減量はマイナス）。0（維持）のときは出さない
  */
-export function suggestPace(input: { planned: number; actual: number | null; answeredThisWeek: boolean; loggedDays: number; room?: number }): PaceSuggestion | null {
-  const { planned, actual, answeredThisWeek, loggedDays, room } = input;
+export function suggestPace(input: { planned: number; actual: number | null; answeredThisWeek: boolean; loggedDays: number; room?: number; intakeRatio?: number }): PaceSuggestion | null {
+  const { planned, actual, answeredThisWeek, loggedDays, room, intakeRatio } = input;
   if (answeredThisWeek || actual === null || Math.abs(planned) < 0.05) return null;
   if (loggedDays < PACE_MIN_LOGGED_DAYS) return null;
   const cutting = planned < 0;
+  if (intakeRatio !== undefined && (cutting ? intakeRatio > 1 + ADHERENCE_TOLERANCE : intakeRatio < 1 - ADHERENCE_TOLERANCE)) return null;
   const shortfall = cutting ? actual - planned : planned - actual;
   if (shortfall < 0.1 - 1e-9) return null;
   let step = suggestedStep(shortfall);

@@ -109,6 +109,15 @@ describe('ペースの見直し', () => {
     expect(suggestPace({ ...base, planned: -0.5, actual: 0.2, room: 600 })?.deltaKcal).toBe(-600);
     expect(suggestPace({ ...base, planned: -0.5, actual: 0.2, room: 250 })).toBeNull();
   });
+  it('計画どおり食べていないときは出さない（減量で5%超の食べ過ぎ）', () => {
+    expect(suggestPace({ ...base, planned: -0.5, actual: -0.1, intakeRatio: 1.08 })).toBeNull();
+    expect(suggestPace({ ...base, planned: -0.5, actual: -0.1, intakeRatio: 1.05 })).not.toBeNull();
+    expect(suggestPace({ ...base, planned: -0.5, actual: -0.1, intakeRatio: 0.9 })).not.toBeNull(); // 少なめに食べて遅い＝提案してよい
+  });
+  it('増量で5%超の食べ足りないときは出さない', () => {
+    expect(suggestPace({ ...base, planned: 0.3, actual: 0.0, intakeRatio: 0.9 })).toBeNull();
+    expect(suggestPace({ ...base, planned: 0.3, actual: 0.0, intakeRatio: 1.0 })).not.toBeNull();
+  });
   it('増量は逆向き（+）で、余地の制限はない', () => {
     const s = suggestPace({ ...base, planned: 0.3, actual: 0.1, room: 0 });
     expect(s?.deltaKcal).toBeGreaterThan(0);

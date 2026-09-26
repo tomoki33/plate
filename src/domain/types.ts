@@ -35,6 +35,13 @@ export interface EngineInput {
   plan: DayType[];
   /** 今日の実際の日タイプ（予定と違うとき） */
   todayType: DayType | null;
+  /**
+   * 今日より前の日に実際に食べたkcal（記録がない日は null）。
+   * 記録のない日は目標どおりに食べたものとして扱う（記録し忘れで残りが膨らまないように）。
+   */
+  actuals?: (number | null)[];
+  /** false なら日タイプ連動なし（無料版）。毎日同じ固定目標 */
+  linked?: boolean;
 }
 
 export interface EngineResult {

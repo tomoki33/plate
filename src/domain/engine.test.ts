@@ -82,3 +82,47 @@ describe('training', () => {
     expect(median([1, 2, 3, 4])).toBe(2.5);
   });
 });
+
+describe('computeTargets: 実績ベースの再配分', () => {
+  const { orig } = computeTargets(base);
+  const target = (i: number) => orig[i].kcal;
+
+  it('記録がない日は目標どおり食べたものとして扱う（変化なし）', () => {
+    const { days } = computeTargets({ ...base, actuals: [null, null, null, null] });
+    expect(days.map((d) => d.kcal)).toEqual(orig.map((d) => d.kcal));
+  });
+
+  it('食べ過ぎた週は、残りの日が減る（+10%の逆側＝−10%まで）', () => {
+    const over = [0, 1, 2, 3].map((i) => target(i) + 400);
+    const { days } = computeTargets({ ...base, actuals: over });
+    expect(days[4].kcal).toBeLessThan(orig[4].kcal);
+    [4, 5, 6].forEach((i) => expect(days[i].kcal).toBeGreaterThanOrEqual(Math.round(orig[i].kcal * 0.9) - 1));
+  });
+
+  it('食べ足りない週は、残りの日が増えるが+10%で止まる', () => {
+    const under = [0, 1, 2, 3].map((i) => target(i) - 1500);
+    const { days } = computeTargets({ ...base, actuals: under });
+    [4, 5, 6].forEach((i) => expect(days[i].kcal).toBeLessThanOrEqual(Math.round(orig[i].kcal * 1.1) + 1));
+    expect(days[5].kcal).toBeGreaterThan(orig[5].kcal);
+  });
+
+  it('過不足が大きくても超過分は追わない', () => {
+    const over = [0, 1, 2, 3].map((i) => target(i) + 3000);
+    const { days } = computeTargets({ ...base, actuals: over });
+    [4, 5, 6].forEach((i) => expect(days[i].kcal).toBeGreaterThanOrEqual(Math.round(orig[i].kcal * 0.9) - 1));
+  });
+
+  it('月曜（過去の日なし）は実績の影響を受けない', () => {
+    const { days } = computeTargets({ ...base, todayIndex: 0, actuals: [] });
+    expect(days.map((d) => d.kcal)).toEqual(computeTargets({ ...base, todayIndex: 0 }).orig.map((d) => d.kcal));
+  });
+});
+
+describe('computeTargets: 無料版（連動なし）', () => {
+  it('毎日同じ固定のPFC目標', () => {
+    const { days } = computeTargets({ ...base, linked: false, todayType: 'off' });
+    expect(new Set(days.map((d) => d.kcal)).size).toBe(1);
+    expect(new Set(days.map((d) => d.C)).size).toBe(1);
+    expect(days[0].kcal).toBe(Math.round(17500 / 7));
+  });
+});

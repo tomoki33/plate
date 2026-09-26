@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
-import { Badge, Field, Hairline, N, Notice, PrimaryButton, Segmented, Sheet, StepButton, T, color, font, hairline, radius } from '@/design-system';
+import { Badge, Field, Hairline, N, Notice, NumberStepper, PrimaryButton, Segmented, Sheet, T, color, font, hairline, radius } from '@/design-system';
 import { getFoodsByIds, searchFoodsDb } from '../db/repo';
 import { SLOT_LABEL, shortName } from '../domain/foodSearch';
 import type { FoodItem, MealSet, Slot } from '../domain/models';
@@ -17,7 +17,12 @@ interface Props {
   initialMode: Mode;
   onClose: () => void;
   remaining: Pfc;
+  /** AI入力の回数は「今日」の分として数える */
   todayKey: string;
+  /** 記録する日（過去の日も選べる） */
+  date: string;
+  /** 「9/24（木）」のように、今日以外を記録するときの表示 */
+  dateLabel: string | null;
   slot: Slot;
   /** トレ後（完了済み）ならマイセットを「トレ後によく使う順」にする */
   postWorkout: boolean;
@@ -30,7 +35,7 @@ const pfcLine = (v: Pfc) => `P${Math.round(v.P)} F${Math.round(v.F)} C${Math.rou
 const scale = (per: { kcal: number; p: number; f: number; c: number }, g: number): Pfc => ({ kcal: Math.round((per.kcal * g) / 100), P: r1((per.p * g) / 100), F: r1((per.f * g) / 100), C: r1((per.c * g) / 100) });
 const foodInput = (f: FoodItem, g: number): MealItemInput => ({ foodId: f.id, name: shortName(f.name), grams: g, ...scale(f, g) });
 
-export function MealFlow({ open, initialMode, onClose, remaining, todayKey, slot, postWorkout, aiLimit }: Props) {
+export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date, dateLabel, slot: slotProp, postWorkout, aiLimit }: Props) {
   const router = useRouter();
   const addMealItems = useStore((s) => s.addMealItems);
   const addFromMealSet = useStore((s) => s.addFromMealSet);
@@ -41,6 +46,7 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, slot
   const aiUsed = useStore((s) => s.aiUsed[todayKey] ?? 0);
 
   const [mode, setMode] = useState<Mode>(initialMode);
+  const [slot, setSlot] = useState<Slot>(slotProp);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<FoodItem[]>([]);
   const [gram, setGram] = useState<{ food: FoodItem; g: number } | null>(null);
@@ -54,12 +60,13 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, slot
 
   useEffect(() => {
     if (open) {
+      setSlot(slotProp);
       setMode(initialMode);
       setGram(null);
       setManual(false);
       setQuery('');
     }
-  }, [open, initialMode]);
+  }, [open, initialMode, slotProp]);
 
   // 検索（入力が止まってから）
   useEffect(() => {
@@ -81,7 +88,7 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, slot
   }, [open, mealSets]);
 
   const finish = (name: string, items: MealItemInput[], ai?: boolean) => {
-    addMealItems(name, items, { ai });
+    addMealItems(name, items, { ai, date, slot });
     setGram(null);
     setAiRows(null);
     setManual(false);
@@ -106,7 +113,7 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, slot
     );
 
   const gramV = gram ? scale(gram.food, gram.g) : null;
-  const setG = (g: number) => setGram((x) => (x ? { ...x, g: Math.max(10, g) } : x));
+  const setG = (g: number) => setGram((x) => (x ? { ...x, g: Math.max(1, g) } : x));
 
   const known = (aiRows ?? []).filter((r) => r.per100);
   const aiItems: MealItemInput[] = known.map((r) => ({ foodId: r.foodId ?? null, name: shortName(r.name!), grams: r.grams!, ...scale(r.per100!, r.grams!) }));
@@ -126,8 +133,11 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, slot
     <>
       <Sheet visible={open && !aiRows} onClose={onClose}>
         <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
-          <T size={17} w={900}>{SLOT_LABEL[slot]}に追加</T>
+          <T size={17} w={900}>{dateLabel ? `${dateLabel} ` : ''}{SLOT_LABEL[slot]}に追加</T>
           <T size={12} c={color.sub} style={{ marginTop: 2 }}>あと P{Math.round(remaining.P)} F{Math.round(remaining.F)} C{Math.round(remaining.C)}（目安）</T>
+          <View style={{ marginTop: 10 }}>
+            <Segmented value={slot} onChange={setSlot} options={(['朝', '昼', '間食', '夜'] as Slot[]).map((v) => ({ value: v, label: v }))} />
+          </View>
           <View style={{ marginTop: 12 }}>
             <Segmented
               value={mode}
@@ -147,7 +157,7 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, slot
               <T size={11} c={color.sub} style={{ marginVertical: 8 }}>{postWorkout ? 'トレ後によく使う順' : '最近使った順'}</T>
               {sets.length === 0 && <T size={13} c={color.sub} style={{ paddingVertical: 12 }}>マイセットはまだありません。検索や文章入力のあと、登録できます。</T>}
               {sets.map((m) => (
-                <Pressable key={m.id} accessibilityRole="button" onPress={() => { addFromMealSet(m, Object.values(setFoods)); onClose(); }} style={{ minHeight: 56, justifyContent: 'center', borderTopWidth: hairline, borderTopColor: color.line, paddingVertical: 8 }}>
+                <Pressable key={m.id} accessibilityRole="button" onPress={() => { addFromMealSet(m, Object.values(setFoods), { date, slot }); onClose(); }} style={{ minHeight: 56, justifyContent: 'center', borderTopWidth: hairline, borderTopColor: color.line, paddingVertical: 8 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <T size={14} w={500}>{m.name}</T>
                     {m.slotHint === hint && <Badge>{m.slotHint}</Badge>}
@@ -185,10 +195,8 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, slot
                 <T size={13} c={color.sub}>‹ 検索に戻る</T>
               </Pressable>
               <T size={16} w={700}>{shortName(gram.food.name)}</T>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20, marginTop: 14 }}>
-                <StepButton label="−" onPress={() => setG(gram.g - 10)} size={52} />
-                <N size={44} w={600}>{gram.g}<T size={16} c={color.sub}>g</T></N>
-                <StepButton label="+" onPress={() => setG(gram.g + 10)} size={52} />
+              <View style={{ alignItems: 'center', marginTop: 14 }}>
+                <NumberStepper value={gram.g} onChange={setG} step={10} min={1} max={5000} unit="g" size={44} width={120} buttonSize={52} accessibilityLabel="グラム" />
               </View>
               <View style={{ flexDirection: 'row', gap: 8, justifyContent: 'center', marginTop: 12, flexWrap: 'wrap' }}>
                 {[50, 100, 150, 200].map((g) => (
@@ -269,7 +277,7 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, slot
                 );
               }
               const x = scale(r.per100, r.grams!);
-              const update = (d: number) => setAiRows((rows) => rows!.map((z, j) => (j === i ? { ...z, grams: Math.max(10, z.grams! + d) } : z)));
+              const setGrams = (g: number) => setAiRows((rows) => rows!.map((z, j) => (j === i ? { ...z, grams: Math.max(1, g) } : z)));
               return (
                 <View key={i} style={{ paddingVertical: 10, borderTopWidth: hairline, borderTopColor: color.line, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <View style={{ flex: 1 }}>
@@ -279,9 +287,7 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, slot
                     </View>
                     <N size={12} w={500} c={color.sub} style={{ marginTop: 2 }}>{pfcLine(x)}</N>
                   </View>
-                  <StepButton label="−" onPress={() => update(-10)} />
-                  <N size={16} w={600} style={{ minWidth: 44, textAlign: 'center' }}>{r.grams}g</N>
-                  <StepButton label="+" onPress={() => update(10)} />
+                  <NumberStepper value={r.grams!} onChange={setGrams} step={10} min={1} max={5000} size={16} width={52} unit="g" accessibilityLabel={`${r.token}のグラム`} />
                 </View>
               );
             })}

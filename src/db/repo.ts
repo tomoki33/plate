@@ -202,6 +202,13 @@ export async function insertMeals(entries: MealEntry[], now = Date.now()) {
   );
 }
 
+/** 食事の行を書き換える（量・栄養・時間帯）。記録時の値のコピーなので、その行の値だけが変わる */
+export async function updateMealEntries(rows: Pick<MealEntry, 'id' | 'slot' | 'grams' | 'kcal' | 'P' | 'F' | 'C'>[], now = Date.now()) {
+  for (const r of rows) {
+    await db.update(s.mealEntry).set({ slot: r.slot, grams: r.grams, kcal: r.kcal, p: r.P, f: r.F, c: r.C, updatedAt: now }).where(eq(s.mealEntry.id, r.id));
+  }
+}
+
 export async function softDeleteMealGroup(groupId: string, now = Date.now()) {
   await db.update(s.mealEntry).set({ deletedAt: now, updatedAt: now }).where(eq(s.mealEntry.groupId, groupId));
 }

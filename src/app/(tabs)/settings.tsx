@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Platform, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Chip, ListRow, N, Notice, OutlineButton, SectionLabel, Segmented, Stepper, T, color, hairline } from '@/design-system';
+import { Chip, ListRow, N, Notice, OutlineButton, SectionLabel, Segmented, NumberStepper, T, color, hairline } from '@/design-system';
 import { useNow } from '../../components/useNow';
 import { DAY_LABELS, DAY_TYPE_JP, type DayType } from '../../domain/types';
 import { ACTIVITY_LEVELS, GOAL_JP, checkWarnings, paceOptions, type Goal } from '../../domain/nutrition';
@@ -78,8 +78,8 @@ export default function SettingsScreen() {
       <View style={{ marginTop: 8 }}>
         <Segmented value={profile.sex} onChange={(v) => st.updateProfile({ sex: v }, w.weight)} options={[{ value: 'male' as const, label: '男性' }, { value: 'female' as const, label: '女性' }]} />
       </View>
-      <ListRow title="生まれた年" right={<Stepper value={String(profile.birthYear)} width={56} onDown={() => st.updateProfile({ birthYear: Math.max(1950, profile.birthYear - 1) }, w.weight)} onUp={() => st.updateProfile({ birthYear: Math.min(now.getFullYear() - 15, profile.birthYear + 1) }, w.weight)} />} />
-      <ListRow title="身長" right={<Stepper value={`${profile.heightCm} cm`} width={64} onDown={() => st.updateProfile({ heightCm: Math.max(130, profile.heightCm - 1) }, w.weight)} onUp={() => st.updateProfile({ heightCm: Math.min(220, profile.heightCm + 1) }, w.weight)} />} />
+      <ListRow title="生まれた年" right={<NumberStepper value={profile.birthYear} onChange={(v) => st.updateProfile({ birthYear: v }, w.weight)} step={1} min={1950} max={now.getFullYear() - 15} width={56} accessibilityLabel="生まれた年" />} />
+      <ListRow title="身長" right={<NumberStepper value={profile.heightCm} onChange={(v) => st.updateProfile({ heightCm: v }, w.weight)} step={1} min={130} max={220} unit="cm" width={64} accessibilityLabel="身長" />} />
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
         {ACTIVITY_LEVELS.map((a) => (
           <Chip key={a.value} label={`活動量：${a.label}`} selected={profile.activity === a.value} onPress={() => st.updateProfile({ activity: a.value }, w.weight)} />
@@ -89,9 +89,9 @@ export default function SettingsScreen() {
 
       <View style={{ marginTop: 22 }}><SectionLabel>日タイプ係数</SectionLabel></View>
       {(['high', 'normal', 'off'] as const).map((t) => (
-        <ListRow key={t} title={DAY_TYPE_JP[t]} dot={typeColor(t)} meta={`${fmt(w.plan.days.find((d) => d.type === t)?.kcal ?? 0)} kcal/日`} minHeight={60} right={<Stepper value={profile.coef[t].toFixed(2)} width={52} onDown={() => st.setCoef(t, -0.05)} onUp={() => st.setCoef(t, 0.05)} />} />
+        <ListRow key={t} title={DAY_TYPE_JP[t]} dot={typeColor(t)} meta={`${fmt(w.plan.days.find((d) => d.type === t)?.kcal ?? 0)} kcal/日`} minHeight={60} right={<NumberStepper value={profile.coef[t]} onChange={(v) => st.setCoefTo(t, v)} step={0.05} min={0.6} max={1.4} decimals={2} width={52} accessibilityLabel={`${DAY_TYPE_JP[t]}の係数`} />} />
       ))}
-      <ListRow title="P係数（g/kg）" dot={color.P} meta={`P ${w.today.P}g/日（毎日同じ）`} minHeight={60} right={<Stepper value={profile.pk.toFixed(1)} width={52} onDown={() => st.setPk(-0.1)} onUp={() => st.setPk(0.1)} />} />
+      <ListRow title="P係数（g/kg）" dot={color.P} meta={`P ${w.today.P}g/日（毎日同じ）`} minHeight={60} right={<NumberStepper value={profile.pk} onChange={(v) => st.setPkTo(v)} step={0.1} min={1.6} max={3} decimals={1} width={52} accessibilityLabel="P係数" />} />
       {!w.features.linkedTargets && <T size={11} c={color.sub} style={{ marginTop: 6 }}>日タイプ係数は、有料プラン（体験中を含む）で目標に反映されます。</T>}
 
       <View style={{ marginTop: 22 }}><SectionLabel>週間スケジュール</SectionLabel></View>

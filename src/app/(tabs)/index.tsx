@@ -2,13 +2,14 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Badge, Bar, N, PrimaryButton, T, color, hairline, radius } from '@/design-system';
+import { Badge, Bar, N, OutlineButton, PrimaryButton, T, color, hairline, radius } from '@/design-system';
+import { EditMealSheet } from '../../components/EditMealSheet';
 import { MealFlow } from '../../components/MealFlow';
 import { WeightSheet } from '../../components/WeightSheet';
 import { useNow } from '../../components/useNow';
-import { formatJpDate, dateKey, slotOf } from '../../domain/dates';
+import { addDays, dateKey, formatJpDate, slotOf } from '../../domain/dates';
 import { DAY_LABELS, DAY_TYPE_JP, type DayType, type Macro } from '../../domain/types';
-import { groupMeals, sumMeals, templateName, weightAverage7, useWeek } from '../../store/selectors';
+import { groupMeals, sumMeals, templateName, weightAverage7, useWeek, type MealGroup } from '../../store/selectors';
 import { useStore } from '../../store/store';
 
 const fmt = (n: number) => Math.round(n).toLocaleString();
@@ -27,19 +28,22 @@ export default function TodayScreen() {
   const now = useNow();
   const w = useWeek(now);
   const meals = useStore((s) => s.meals);
+  const sessions = useStore((s) => s.sessions);
   const weights = useStore((s) => s.weights);
   const removeMealGroup = useStore((s) => s.removeMealGroup);
   const setWeight = useStore((s) => s.setWeight);
   const maybeUpdateTdee = useStore((s) => s.maybeUpdateTdee);
   const recordTarget = useStore((s) => s.recordTarget);
-  const [viewDay, setViewDay] = useState<number | null>(null);
+  // 見ている日。null は今日。week は「何週前か」（0＝今週）、day は月曜=0
+  const [sel, setSel] = useState<{ week: number; day: number } | null>(null);
+  const [editing, setEditing] = useState<MealGroup | null>(null);
   const [sheet, setSheet] = useState<null | 'meal' | 'weight'>(null);
   const [mode, setMode] = useState<0 | 1 | 2>(0);
   const { meal } = useLocalSearchParams<{ meal?: string }>();
 
   useEffect(() => {
     if (meal) {
-      setViewDay(null);
+      setSel(null);
       setMode(0);
       setSheet('meal');
       router.setParams({ meal: undefined });
@@ -61,17 +65,31 @@ export default function TodayScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [w.todayKey, t.type, t.kcal, t.P, t.F, t.C]);
 
-  const vd = viewDay ?? w.ti;
-  const isToday = vd === w.ti;
-  const dd = w.eng.days[vd];
-  const maxK = Math.max(...w.eng.days.map((d) => d.kcal));
-  const viewKey = dateKey(w.dates[vd]);
-  const viewEaten = useMemo(() => sumMeals(meals.filter((m) => m.date === viewKey)), [meals, viewKey]);
-  const past = vd < w.ti;
+  const weekBack = sel?.week ?? 0;
+  const vd = sel?.day ?? w.ti;
+  const dates = useMemo(() => w.dates.map((d) => addDays(d, -7 * weekBack)), [w.dates, weekBack]);
+  const viewDate = dates[vd];
+  const viewKey = dateKey(viewDate);
+  const isToday = viewKey === w.todayKey;
+  const isPast = viewKey < w.todayKey;
+  // 今週は再配分後の目標。前の週は、いまの予定をもとにした基準の目標（その週の再配分は残していない）
+  const bars = weekBack === 0 ? w.eng.days : w.plan.days;
+  const dd = bars[vd];
+  const maxK = Math.max(...bars.map((d) => d.kcal));
+  const viewMeals = useMemo(() => meals.filter((m) => m.date === viewKey), [meals, viewKey]);
+  const viewEaten = useMemo(() => sumMeals(viewMeals), [viewMeals]);
+  const viewGroups = useMemo(() => groupMeals(viewMeals), [viewMeals]);
+  const viewWorkouts = useMemo(() => sessions.filter((x) => x.date === viewKey), [sessions, viewKey]);
+  const viewWeight = weights[viewKey];
+  const past = isPast;
   const linked = w.features.linkedTargets;
+  const canRecord = isToday || isPast;
+  const viewRemaining = isToday ? w.remaining : { kcal: dd.kcal - viewEaten.kcal, P: dd.P - viewEaten.P, F: dd.F - viewEaten.F, C: dd.C - viewEaten.C };
+  const dayLabel = `${viewDate.getMonth() + 1}/${viewDate.getDate()}（${DAY_LABELS[vd]}）`;
+  const go = (week: number, day = vd) => setSel(week === 0 && day === w.ti ? null : { week, day });
 
-  const menuOf = (i: number) => (i === w.ti && w.todayWorkout ? w.todayWorkout.name : i === w.ti && dd && w.eng.days[i].type === 'off' && w.changed ? 'オフ' : templateName(w.templates, w.weekPlan[i]));
-  const badgeText = (i: number) => (w.eng.days[i].type === 'off' ? 'オフ' : `${menuOf(i)}・${DAY_TYPE_JP[w.eng.days[i].type]}`);
+  const menuOf = (i: number) => (i === w.ti && w.todayWorkout ? w.todayWorkout.name : i === w.ti && w.eng.days[i].type === 'off' && w.changed ? 'オフ' : templateName(w.templates, w.weekPlan[i]));
+  const badgeText = (i: number) => (bars[i].type === 'off' ? 'オフ' : `${weekBack === 0 ? menuOf(i) : templateName(w.templates, w.weekPlan[i])}・${DAY_TYPE_JP[bars[i].type]}`);
 
   const dC = w.today.C - w.plan.days[w.ti].C;
   let lineL = '';
@@ -95,44 +113,52 @@ export default function TodayScreen() {
       lineR = 'トレ前';
     }
   } else if (past) {
-    lineL = '記録済み';
-    lineR = viewEaten.kcal ? `実績 ${fmt(viewEaten.kcal)} kcal` : '記録なし';
+    lineL = viewEaten.kcal ? '記録済み' : '記録なし';
+    lineR = viewEaten.kcal ? `目標より ${sign(viewEaten.kcal - dd.kcal)}${fmt(Math.abs(viewEaten.kcal - dd.kcal))}kcal` : '下から追加できます';
   } else {
     lineL = dd.type === 'off' ? 'トレなし' : `予定：${templateName(w.templates, w.weekPlan[vd])}`;
     lineR = linked ? (dd.type === 'off' ? 'Pは維持、Cを減らす' : '予定を変えたら残りの日に配り直し') : '';
   }
 
-  const rem = w.remaining;
+  const rem = viewRemaining;
   const kcalLabel = isToday ? (rem.kcal >= 0 ? '残り（目安）' : '超過（目安）') : past ? '実績' : '目標（目安）';
   const kcalBig = isToday ? Math.abs(rem.kcal) : past ? viewEaten.kcal : dd.kcal;
   const kcalSub = isToday || past ? `/ 目標 ${fmt(dd.kcal)} kcal` : 'kcal';
-  const avg7 = weightAverage7(weights, now);
-  const groups = useMemo(() => groupMeals(w.todayMeals), [w.todayMeals]);
+  const avg7 = weightAverage7(weights, viewDate);
   const openMeal = (m: 0 | 1 | 2 = 0) => {
     setMode(m);
     setSheet('meal');
   };
+  const weightLabel = isToday ? '体重を記録' : `${dayLabel}の体重`;
 
   return (
     <View style={{ flex: 1, backgroundColor: color.bg }}>
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: 110 }}>
-        <View style={{ paddingHorizontal: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <T size={13} c={color.sub}>{formatJpDate(w.dates[vd])}</T>
+      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 4, paddingBottom: 110 }}>
+        <View style={{ paddingLeft: 10, paddingRight: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Pressable accessibilityRole="button" accessibilityLabel="前の週" disabled={weekBack >= 52} onPress={() => go(weekBack + 1)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: weekBack >= 52 ? 0.3 : 1 }}>
+              <T size={18} c={color.sub}>‹</T>
+            </Pressable>
+            <T size={13} c={color.sub}>{formatJpDate(viewDate)}</T>
+            <Pressable accessibilityRole="button" accessibilityLabel="次の週" disabled={weekBack === 0} onPress={() => go(weekBack - 1)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: weekBack === 0 ? 0.3 : 1 }}>
+              <T size={18} c={color.sub}>›</T>
+            </Pressable>
+          </View>
           <Badge high={dd.type === 'high'}>{badgeText(vd)}</Badge>
         </View>
 
         {/* 週バー */}
-        <View style={{ flexDirection: 'row', gap: 4, paddingHorizontal: 16, marginTop: 12 }}>
-          {w.eng.days.map((d, i) => (
+        <View style={{ flexDirection: 'row', gap: 4, paddingHorizontal: 16, marginTop: 4 }}>
+          {bars.map((d, i) => (
             <Pressable
               key={i}
               accessibilityRole="button"
               accessibilityLabel={`${DAY_LABELS[i]}曜日を表示`}
-              onPress={() => setViewDay(i)}
+              onPress={() => go(weekBack, i)}
               style={{ flex: 1, height: 56, borderRadius: radius.button, backgroundColor: i === vd ? color.surface : 'transparent', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 6 }}
             >
               <View style={{ width: 18, height: Math.round((d.kcal / maxK) * 34), backgroundColor: typeColor(d.type), borderRadius: radius.bar }} />
-              <T size={11} w={i === vd ? 700 : 400} c={i === vd ? color.text : i === w.ti ? color.brandText : color.sub} style={{ marginTop: 4 }}>
+              <T size={11} w={i === vd ? 700 : 400} c={i === vd ? color.text : weekBack === 0 && i === w.ti ? color.brandText : color.sub} style={{ marginTop: 4 }}>
                 {DAY_LABELS[i]}
               </T>
             </Pressable>
@@ -183,38 +209,50 @@ export default function TodayScreen() {
           <T size={13} w={700} c={lineC}>{lineR}</T>
         </View>
 
-        {!linked && (
+        {!linked && isToday && (
           <Pressable accessibilityRole="button" onPress={() => router.push('/paywall')} style={{ marginHorizontal: 22, minHeight: 44, justifyContent: 'center', borderBottomWidth: hairline, borderBottomColor: color.line }}>
             <T size={12} c={color.sub}>目標は毎日同じです。トレに合わせて変わる「日タイプ連動」は有料プランで使えます。 <T size={12} w={700}>プランを見る ›</T></T>
           </Pressable>
         )}
 
-        {isToday && (
+        {canRecord && (
           <>
-            {/* 体重 */}
+            {/* 体重（過去の日も入力・変更できる） */}
             <Pressable accessibilityRole="button" onPress={() => setSheet('weight')} style={{ marginHorizontal: 22, minHeight: 48, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: hairline, borderBottomColor: color.line }}>
               <T size={13} c={color.badgeFg}>
-                {w.weightLogged ? (
+                {viewWeight !== undefined ? (
                   <>
-                    <N size={15} w={600}>{w.weight.toFixed(1)}</N> kg{avg7 ? `・7日平均 ${avg7.toFixed(1)}` : ''}
+                    <N size={15} w={600}>{viewWeight.toFixed(1)}</N> kg{avg7 ? `・7日平均 ${avg7.toFixed(1)}` : ''}
                   </>
-                ) : (
+                ) : isToday ? (
                   '今朝はまだ'
+                ) : (
+                  '体重の記録なし'
                 )}
               </T>
-              <T size={13} w={700} c={w.weightLogged ? color.sub : color.text}>{w.weightLogged ? '変更' : '入力'}</T>
+              <T size={13} w={700} c={viewWeight !== undefined ? color.sub : color.text}>{viewWeight !== undefined ? '変更' : '入力'}</T>
             </Pressable>
 
-            {/* 食事リスト */}
+            {/* その日のトレ（記録があれば） */}
+            {!isToday && viewWorkouts.map((x) => (
+              <View key={x.id} style={{ marginHorizontal: 22, minHeight: 44, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: hairline, borderBottomColor: color.line }}>
+                <T size={13} c={color.badgeFg}>トレ：{x.name}</T>
+                <T size={12} c={color.sub}>{x.doneSets}セット</T>
+              </View>
+            ))}
+
+            {/* 食事リスト（タップで編集） */}
             <View style={{ marginTop: 14, paddingHorizontal: 22 }}>
-              <T size={11} c={color.sub}>食事 {groups.length}件</T>
-              {groups.length === 0 && <T size={13} c={color.sub} style={{ paddingVertical: 16 }}>まだ記録がありません。</T>}
-              {groups.map((g) => (
+              <T size={11} c={color.sub}>食事 {viewGroups.length}件</T>
+              {viewGroups.length === 0 && <T size={13} c={color.sub} style={{ paddingVertical: 16 }}>まだ記録がありません。</T>}
+              {viewGroups.map((g) => (
                 <View key={g.groupId} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', borderBottomWidth: hairline, borderBottomColor: color.line }}>
-                  <T size={12} c={color.sub} style={{ width: 36 }}>{g.slot}</T>
-                  <T size={14} style={{ flex: 1 }} numberOfLines={1}>{g.name}</T>
-                  {g.ai && <Badge high>AI</Badge>}
-                  <N size={15} w={500} style={{ marginLeft: 8, minWidth: 40, textAlign: 'right' }}>{fmt(g.kcal)}</N>
+                  <Pressable accessibilityRole="button" accessibilityLabel={`${g.name}を編集`} onPress={() => setEditing(g)} style={{ flex: 1, minHeight: 48, flexDirection: 'row', alignItems: 'center' }}>
+                    <T size={12} c={color.sub} style={{ width: 36 }}>{g.slot}</T>
+                    <T size={14} style={{ flex: 1 }} numberOfLines={1}>{g.name}</T>
+                    {g.ai && <Badge high>AI</Badge>}
+                    <N size={15} w={500} style={{ marginLeft: 8, minWidth: 40, textAlign: 'right' }}>{fmt(g.kcal)}</N>
+                  </Pressable>
                   <Pressable accessibilityRole="button" accessibilityLabel={`${g.name}を削除`} onPress={() => removeMealGroup(g.groupId)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
                     <T size={16} c={color.sub}>×</T>
                   </Pressable>
@@ -225,13 +263,26 @@ export default function TodayScreen() {
         )}
       </ScrollView>
 
-      {/* 固定の主ボタン */}
-      <View style={{ position: 'absolute', left: 16, right: 16, bottom: 12 }}>
-        <PrimaryButton label={isToday ? '食事を記録' : '今日に戻る'} onPress={() => (isToday ? openMeal(0) : setViewDay(null))} />
+      {/* 固定のボタン。今日は「食事を記録」、過去の日は「今日に戻る」と「食事を記録」 */}
+      <View style={{ position: 'absolute', left: 16, right: 16, bottom: 12, flexDirection: 'row', gap: 8 }}>
+        {!isToday && <OutlineButton label="今日に戻る" onPress={() => setSel(null)} style={{ flex: 1 }} />}
+        {canRecord && <PrimaryButton label={isToday ? '食事を記録' : `${dayLabel}に記録`} onPress={() => openMeal(0)} style={{ flex: isToday ? 1 : 1.5 }} />}
       </View>
 
-      <MealFlow open={sheet === 'meal'} initialMode={mode} onClose={() => setSheet(null)} remaining={rem} todayKey={w.todayKey} slot={slotOf(now)} postWorkout={!!w.todayWorkout} aiLimit={w.features.aiLimit} />
-      <WeightSheet open={sheet === 'weight'} onClose={() => setSheet(null)} initial={w.weight} onSave={(kg) => setWeight(w.todayKey, kg)} />
+      <MealFlow
+        open={sheet === 'meal'}
+        initialMode={mode}
+        onClose={() => setSheet(null)}
+        remaining={rem}
+        todayKey={w.todayKey}
+        date={viewKey}
+        dateLabel={isToday ? null : dayLabel}
+        slot={isToday ? slotOf(now) : '昼'}
+        postWorkout={isToday && !!w.todayWorkout}
+        aiLimit={w.features.aiLimit}
+      />
+      <WeightSheet title={weightLabel} open={sheet === 'weight'} onClose={() => setSheet(null)} initial={viewWeight ?? w.weight} onSave={(kg) => setWeight(viewKey, kg)} />
+      <EditMealSheet group={editing} onClose={() => setEditing(null)} />
     </View>
   );
 }

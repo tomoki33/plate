@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Chip, ListRow, N, Notice, PrimaryButton, SectionLabel, Segmented, Stepper, T, color, hairline, radius } from '@/design-system';
+import { Chip, ListRow, N, Notice, PrimaryButton, SectionLabel, Segmented, NumberStepper, T, color, hairline, radius } from '@/design-system';
 import { ACTIVITY_LEVELS, DEFAULT_PROFILE, GOAL_JP, checkWarnings, clampPace, defaultPace, initialTdee, paceOptions, weekKcalOf, type Goal, type Sex } from '../domain/nutrition';
 import { TRIAL_DAYS } from '../domain/entitlement';
 import { latestBackupAt, restoreLatest } from '../services/backup';
@@ -75,9 +75,9 @@ export default function Onboarding() {
       <View style={{ marginTop: 8 }}>
         <Segmented value={sex} onChange={setSex} options={[{ value: 'male', label: '男性' }, { value: 'female', label: '女性' }]} />
       </View>
-      <ListRow title="生まれた年" right={<Stepper value={String(birthYear)} width={56} onDown={() => setBirthYear((v) => Math.max(1950, v - 1))} onUp={() => setBirthYear((v) => Math.min(new Date().getFullYear() - 15, v + 1))} />} />
-      <ListRow title="身長" right={<Stepper value={`${heightCm} cm`} width={64} onDown={() => setHeightCm((v) => Math.max(130, v - 1))} onUp={() => setHeightCm((v) => Math.min(220, v + 1))} />} />
-      <ListRow title="体重" right={<Stepper value={`${weight.toFixed(1)} kg`} width={72} onDown={() => setWeight((v) => Math.max(30, Math.round((v - 0.1) * 10) / 10))} onUp={() => setWeight((v) => Math.min(200, Math.round((v + 0.1) * 10) / 10))} />} />
+      <ListRow title="生まれた年" right={<NumberStepper value={birthYear} onChange={setBirthYear} step={1} min={1950} max={new Date().getFullYear() - 15} width={56} accessibilityLabel="生まれた年" />} />
+      <ListRow title="身長" right={<NumberStepper value={heightCm} onChange={setHeightCm} step={1} min={130} max={220} unit="cm" width={64} accessibilityLabel="身長" />} />
+      <ListRow title="体重" right={<NumberStepper value={weight} onChange={setWeight} step={0.1} min={30} max={200} decimals={1} unit="kg" width={72} accessibilityLabel="体重" />} />
 
       <View style={{ marginTop: 22 }}><SectionLabel>普段の活動量</SectionLabel></View>
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>

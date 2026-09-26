@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Badge, Chip, N, Notice, OutlineButton, PrimaryButton, StepButton, T, color, hairline, radius } from '@/design-system';
+import { Badge, Chip, N, Notice, NumberStepper, OutlineButton, PrimaryButton, T, color, hairline, radius } from '@/design-system';
 import { ExercisePicker } from '../../components/ExercisePicker';
 import { useNow } from '../../components/useNow';
 import { DEFAULT_MEDIAN_VOLUME, median } from '../../domain/training';
@@ -266,8 +266,8 @@ function Recording({ insetsTop }: { insetsTop: number }) {
             {/* 大きな±ボタン（kg±2.5、回±1） */}
             {sel && (
               <View style={{ marginTop: 16, marginHorizontal: 16, flexDirection: 'row', gap: 12 }}>
-                <Stepper label="kg" value={String(sel.kg)} onDown={() => s.adjustSet('kg', -2.5)} onUp={() => s.adjustSet('kg', 2.5)} />
-                <Stepper label="回" value={String(sel.reps)} onDown={() => s.adjustSet('reps', -1)} onUp={() => s.adjustSet('reps', 1)} />
+                <SetStepper label="kg" value={sel.kg} step={2.5} decimals={1} max={1000} onChange={(v) => s.setSetValue('kg', v)} />
+                <SetStepper label="回" value={sel.reps} step={1} decimals={0} min={1} max={200} onChange={(v) => s.setSetValue('reps', v)} />
               </View>
             )}
           </>
@@ -288,14 +288,13 @@ function Recording({ insetsTop }: { insetsTop: number }) {
   );
 }
 
-function Stepper({ label, value, onDown, onUp }: { label: string; value: string; onDown: () => void; onUp: () => void }) {
+/** 大きな±ボタン（kg±2.5、回±1）。数字をタップすると、直接入力できる */
+function SetStepper({ label, value, step, decimals, min = 0, max, onChange }: { label: string; value: number; step: number; decimals: number; min?: number; max: number; onChange: (v: number) => void }) {
   return (
     <View style={{ flex: 1, alignItems: 'center', padding: 10, borderRadius: radius.card, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line }}>
       <T size={11} c={color.sub}>{label}</T>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
-        <StepButton label="−" size={56} onPress={onDown} />
-        <N size={28} w={600} style={{ minWidth: 48, textAlign: 'center' }}>{value}</N>
-        <StepButton label="+" size={56} onPress={onUp} />
+      <View style={{ marginTop: 4 }}>
+        <NumberStepper value={value} onChange={onChange} step={step} min={min} max={max} decimals={decimals} size={28} width={56} buttonSize={56} accessibilityLabel={label} />
       </View>
     </View>
   );

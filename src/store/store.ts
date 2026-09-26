@@ -7,6 +7,7 @@ import type { Exercise, ExerciseLog, FoodItem, MealEntry, MealSet, ProfileData, 
 import { searchKey } from '../domain/foodSearch';
 import { bestSet, decideDayType, median, volumeScore, DEFAULT_MEDIAN_VOLUME } from '../domain/training';
 import type { Coef, DayType, Pfc } from '../domain/types';
+import { scaleMealEntry } from '../domain/meals';
 import { uuid } from '../lib/id';
 
 export interface Session {
@@ -89,14 +90,19 @@ interface State {
   completeOnboarding(input: { sex: Sex; birthYear: number; heightCm: number; activity: number; goal: Goal; pace: number; weight: number }): void;
   updateProfile(patch: Partial<Pick<ProfileData, 'sex' | 'birthYear' | 'heightCm' | 'activity'>> & { goal?: Goal; pace?: number }, weightKg: number): void;
   setCoef(t: keyof Coef, delta: number): void;
+  setCoefTo(t: keyof Coef, value: number): void;
   setPk(delta: number): void;
+  setPkTo(value: number): void;
   maybeUpdateTdee(now: Date): void;
   recordTarget(date: string, target: { dayType: DayType; kcal: number; P: number; F: number; C: number }, reason: string): void;
 
   // 食事
-  addMealItems(groupName: string, items: MealItemInput[], opts?: { ai?: boolean; mealSetId?: string }): string;
+  /** date を省くと今日、slot を省くと今の時刻の時間帯 */
+  addMealItems(groupName: string, items: MealItemInput[], opts?: { ai?: boolean; mealSetId?: string; date?: string; slot?: Slot }): string;
+  /** 食事（同じ操作で追加したまとまり）の量と時間帯を直す。量は、その行の栄養を比例で計算し直す */
+  updateMealGroup(groupId: string, patch: { slot?: Slot; grams?: Record<string, number> }): void;
   removeMealGroup(groupId: string): void;
-  addFromMealSet(set: MealSet, foods: FoodItem[]): void;
+  addFromMealSet(set: MealSet, foods: FoodItem[], opts?: { date?: string; slot?: Slot }): void;
   saveMealSet(name: string, items: { foodId: string; g: number }[], slotHint?: string | null): void;
   deleteMealSet(id: string): void;
   saveMyFood(f: { id?: string; name: string; kcal: number; p: number; f: number; c: number; defaultG?: number | null; unitG?: number | null }): string;
@@ -120,6 +126,7 @@ interface State {
   selectExercise(i: number): void;
   selectSet(i: number): void;
   adjustSet(field: 'kg' | 'reps', delta: number): void;
+  setSetValue(field: 'kg' | 'reps', value: number): void;
   setRir(rir: number | null): void;
   toggleSet(i: number): void;
   addSet(): void;
@@ -261,6 +268,14 @@ export const useStore = create<State>()((set, get) => {
       set((s) => ({ profile: { ...s.profile, coef: { ...s.profile.coef, [t]: Math.round(Math.min(1.4, Math.max(0.6, s.profile.coef[t] + delta)) * 100) / 100 } } }));
       saveProfileNow();
     },
+    setCoefTo(t, value) {
+      set((s) => ({ profile: { ...s.profile, coef: { ...s.profile.coef, [t]: Math.round(Math.min(1.4, Math.max(0.6, value)) * 100) / 100 } } }));
+      saveProfileNow();
+    },
+    setPkTo(value) {
+      set((s) => ({ profile: { ...s.profile, pk: Math.min(3, Math.max(1.6, round1(value))) } }));
+      saveProfileNow();
+    },
     setPk(delta) {
       set((s) => ({ profile: { ...s.profile, pk: Math.min(3, Math.max(1.6, round1(s.profile.pk + delta))) } }));
       saveProfileNow();
@@ -296,8 +311,8 @@ export const useStore = create<State>()((set, get) => {
       const slot: Slot = slotOf(now);
       const rows: MealEntry[] = items.map((it, i) => ({
         id: uuid(),
-        date: dateKey(now),
-        slot,
+        date: opts.date ?? dateKey(now),
+        slot: opts.slot ?? slot,
         foodId: it.foodId,
         groupId,
         groupName,
@@ -319,6 +334,24 @@ export const useStore = create<State>()((set, get) => {
       return groupId;
     },
 
+    updateMealGroup(groupId, patch) {
+      const before = get().meals.filter((m) => m.groupId === groupId);
+      if (!before.length) return;
+      const after = before.map((m) => {
+        const g = patch.grams?.[m.id];
+        const moved = { ...m, slot: patch.slot ?? m.slot };
+        return g === undefined ? moved : scaleMealEntry(moved, g);
+      });
+      const byId = new Map(after.map((m) => [m.id, m]));
+      set((s) => ({ meals: s.meals.map((m) => byId.get(m.id) ?? m) }));
+      persist(repo.updateMealEntries(after));
+      get().showToast(`${before[0].groupName} を直しました`, () => {
+        const old = new Map(before.map((m) => [m.id, m]));
+        set((s) => ({ meals: s.meals.map((m) => old.get(m.id) ?? m) }));
+        persist(repo.updateMealEntries(before));
+      });
+    },
+
     removeMealGroup(groupId) {
       const rows = get().meals.filter((m) => m.groupId === groupId);
       if (!rows.length) return;
@@ -330,7 +363,7 @@ export const useStore = create<State>()((set, get) => {
       });
     },
 
-    addFromMealSet(ms, foods) {
+    addFromMealSet(ms, foods, opts = {}) {
       const byId = new Map(foods.map((f) => [f.id, f]));
       const items: MealItemInput[] = ms.items.flatMap((it) => {
         const f = byId.get(it.foodId);
@@ -339,7 +372,7 @@ export const useStore = create<State>()((set, get) => {
         return [{ foodId: f.id, name: f.name, grams: it.g, kcal: Math.round(f.kcal * k), P: round1(f.p * k), F: round1(f.f * k), C: round1(f.c * k) }];
       });
       if (!items.length) return;
-      get().addMealItems(ms.name, items, { mealSetId: ms.id });
+      get().addMealItems(ms.name, items, { mealSetId: ms.id, ...opts });
       const next: MealSet = { ...ms, useCount: ms.useCount + 1, lastUsedAt: Date.now() };
       set((s) => ({ mealSets: s.mealSets.map((m) => (m.id === ms.id ? next : m)) }));
       persist(repo.saveMealSet(next));
@@ -479,6 +512,16 @@ export const useStore = create<State>()((set, get) => {
         const st = ses.ex[ses.cur].sets[ses.sel];
         if (!st) return s;
         st[field] = field === 'kg' ? Math.max(0, Math.round((st.kg + delta) * 10) / 10) : Math.max(1, st.reps + delta);
+        return { session: ses };
+      });
+    },
+    setSetValue(field, value) {
+      set((s) => {
+        if (!s.session || !s.session.ex.length) return s;
+        const ses = clone(s.session);
+        const st = ses.ex[ses.cur].sets[ses.sel];
+        if (!st) return s;
+        st[field] = field === 'kg' ? Math.max(0, Math.round(value * 10) / 10) : Math.max(1, Math.round(value));
         return { session: ses };
       });
     },

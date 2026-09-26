@@ -2,7 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Field, ListRow, N, OutlineButton, PrimaryButton, SectionLabel, Segmented, StepButton, T, color, hairline } from '@/design-system';
+import { Field, ListRow, NumberStepper, OutlineButton, PrimaryButton, SectionLabel, Segmented, T, color, hairline } from '@/design-system';
 import { ExercisePicker } from '../../components/ExercisePicker';
 import type { TemplateExercise, WorkoutTemplate } from '../../domain/models';
 import { uuid } from '../../lib/id';
@@ -70,9 +70,9 @@ export default function TemplateEditor() {
               <Pressable accessibilityRole="button" accessibilityLabel="外す" onPress={() => setRows((x) => x.filter((_, j) => j !== i))} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><T size={16} c={color.sub}>×</T></Pressable>
             </View>
             <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-              <Mini label="セット" value={String(r.sets)} onDown={() => upd(i, { sets: Math.max(1, r.sets - 1) })} onUp={() => upd(i, { sets: Math.min(10, r.sets + 1) })} />
-              <Mini label="kg" value={String(r.kg)} onDown={() => upd(i, { kg: Math.max(0, Math.round((r.kg - 2.5) * 10) / 10) })} onUp={() => upd(i, { kg: Math.round((r.kg + 2.5) * 10) / 10 })} />
-              <Mini label="回" value={String(r.reps)} onDown={() => upd(i, { reps: Math.max(1, r.reps - 1) })} onUp={() => upd(i, { reps: r.reps + 1 })} />
+              <Mini label="セット" value={r.sets} step={1} min={1} max={10} onChange={(v) => upd(i, { sets: v })} />
+              <Mini label="kg" value={r.kg} step={2.5} decimals={1} min={0} max={1000} onChange={(v) => upd(i, { kg: v })} />
+              <Mini label="回" value={r.reps} step={1} min={1} max={200} onChange={(v) => upd(i, { reps: v })} />
             </View>
           </View>
         ))}
@@ -99,13 +99,11 @@ export default function TemplateEditor() {
   );
 }
 
-function Mini({ label, value, onDown, onUp }: { label: string; value: string; onDown: () => void; onUp: () => void }) {
+function Mini({ label, value, step, decimals = 0, min, max, onChange }: { label: string; value: number; step: number; decimals?: number; min: number; max: number; onChange: (v: number) => void }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
       <T size={11} c={color.sub}>{label}</T>
-      <StepButton label="−" onPress={onDown} />
-      <N size={16} w={600} style={{ minWidth: 34, textAlign: 'center' }}>{value}</N>
-      <StepButton label="+" onPress={onUp} />
+      <NumberStepper value={value} onChange={onChange} step={step} min={min} max={max} decimals={decimals} size={16} width={44} accessibilityLabel={label} />
     </View>
   );
 }

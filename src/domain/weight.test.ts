@@ -79,27 +79,38 @@ describe('到達予測', () => {
 
 describe('ペースの見直し', () => {
   const base = { answeredThisWeek: false, loggedDays: 12 };
-  it('減量：予定より0.1kg/週以上遅いと提案する。0.1遅れは 400kcal', () => {
-    const s = suggestPace({ ...base, planned: -0.5, actual: -0.4 });
-    expect(s?.deltaKcal).toBe(-400); // 0.1 × 7700 × 0.5 = 385 → 400
-    expect(s?.message).toContain('週の合計を400kcal減らしますか');
+  it('減量：予定より0.15kg/週以上遅いと提案する。遅れに応じて量が変わる', () => {
+    const s = suggestPace({ ...base, planned: -0.5, actual: -0.3 }); // 0.2遅れ → 0.2×7700×0.5=770 → 800
+    expect(s?.deltaKcal).toBe(-800);
+    expect(s?.message).toContain('週の合計を800kcal減らしますか');
+    expect(s?.message).toContain('−0.3kg/週、予定 −0.5');
   });
   it('遅れが大きいほど提案量が増える', () => {
-    const a = suggestPace({ ...base, planned: -0.5, actual: -0.4 })!.deltaKcal;
-    const b = suggestPace({ ...base, planned: -0.5, actual: -0.2 })!.deltaKcal;
-    const c = suggestPace({ ...base, planned: -0.5, actual: 0.2 })!.deltaKcal;
+    const a = suggestPace({ ...base, planned: -0.5, actual: -0.3 })!.deltaKcal;
+    const b = suggestPace({ ...base, planned: -0.5, actual: -0.1 })!.deltaKcal;
+    const c = suggestPace({ ...base, planned: -0.5, actual: 0.3 })!.deltaKcal;
     expect(Math.abs(b)).toBeGreaterThan(Math.abs(a));
     expect(Math.abs(c)).toBeGreaterThanOrEqual(Math.abs(b));
-    expect(b).toBe(-1200); // 0.3 × 7700 × 0.5 = 1155 → 1200
   });
   it('提案量は300〜1,400kcalに収まる', () => {
-    expect(suggestedStep(0.1)).toBe(400);
+    expect(suggestedStep(0.15)).toBe(600);
     expect(suggestedStep(0.05)).toBe(300);
     expect(suggestedStep(2)).toBe(1400);
   });
-  it('予定どおり、または少し遅い程度なら出さない', () => {
-    expect(suggestPace({ ...base, planned: -0.5, actual: -0.45 })).toBeNull();
+  it('0.15未満の遅れ（日々のぶれ程度）では出さない', () => {
+    expect(suggestPace({ ...base, planned: -0.5, actual: -0.4 })).toBeNull();
     expect(suggestPace({ ...base, planned: -0.5, actual: -0.6 })).toBeNull();
+    expect(suggestPace({ ...base, planned: -0.5, actual: -0.35 })).not.toBeNull();
+  });
+  it('「2週続けて」：1週前の窓も遅れているときだけ出す。比較できなければ出さない', () => {
+    expect(suggestPace({ ...base, planned: -0.5, actual: -0.2, previous: -0.25 })).not.toBeNull();
+    expect(suggestPace({ ...base, planned: -0.5, actual: -0.2, previous: -0.5 })).toBeNull(); // 1週前は順調（一時的な停滞かもしれない）
+    expect(suggestPace({ ...base, planned: -0.5, actual: -0.2, previous: null })).toBeNull();
+  });
+  it('目標・維持カロリーを動かして14日以内は出さない（二重に絞らない）', () => {
+    expect(suggestPace({ ...base, planned: -0.5, actual: -0.1, daysSinceAdjust: 13 })).toBeNull();
+    expect(suggestPace({ ...base, planned: -0.5, actual: -0.1, daysSinceAdjust: 14 })).not.toBeNull();
+    expect(suggestPace({ ...base, planned: -0.5, actual: -0.1, daysSinceAdjust: null })).not.toBeNull();
   });
   it('食事の記録が14日中10日未満なら出さない', () => {
     expect(suggestPace({ ...base, loggedDays: 9, planned: -0.5, actual: -0.1 })).toBeNull();
@@ -112,13 +123,10 @@ describe('ペースの見直し', () => {
   it('計画どおり食べていないときは出さない（減量で5%超の食べ過ぎ）', () => {
     expect(suggestPace({ ...base, planned: -0.5, actual: -0.1, intakeRatio: 1.08 })).toBeNull();
     expect(suggestPace({ ...base, planned: -0.5, actual: -0.1, intakeRatio: 1.05 })).not.toBeNull();
-    expect(suggestPace({ ...base, planned: -0.5, actual: -0.1, intakeRatio: 0.9 })).not.toBeNull(); // 少なめに食べて遅い＝提案してよい
+    expect(suggestPace({ ...base, planned: -0.5, actual: -0.1, intakeRatio: 0.9 })).not.toBeNull();
   });
-  it('増量で5%超の食べ足りないときは出さない', () => {
+  it('増量は逆向き（+）で、食べ足りないときは出さない。余地の制限はない', () => {
     expect(suggestPace({ ...base, planned: 0.3, actual: 0.0, intakeRatio: 0.9 })).toBeNull();
-    expect(suggestPace({ ...base, planned: 0.3, actual: 0.0, intakeRatio: 1.0 })).not.toBeNull();
-  });
-  it('増量は逆向き（+）で、余地の制限はない', () => {
     const s = suggestPace({ ...base, planned: 0.3, actual: 0.1, room: 0 });
     expect(s?.deltaKcal).toBeGreaterThan(0);
     expect(s?.message).toContain('増え方が予定より遅め');

@@ -142,6 +142,7 @@ export function useWeightStats(now: Date): WeightStats {
   return useMemo(() => {
     const avg = avg7(weights, now);
     const pace = paceKgPerWeek(weights, now);
+    const previousPace = paceKgPerWeek(weights, addDays(now, -7));
     const planned = profile.pace;
     const goal = profile.goalWeightKg;
     const dir = profile.goal === 'bulk' ? 'up' : 'down';
@@ -163,6 +164,10 @@ export function useWeightStats(now: Date): WeightStats {
     const room = weekTotal - floor;
     // 計画どおり食べていたか（記録した日の平均摂取 ÷ 1日の目標）
     const intakeRatio = loggedDays > 0 ? intakeSum / loggedDays / (weekTotal / 7) : undefined;
+    // 目標・維持カロリーを最後に動かしてからの日数（維持カロリーの補正日、または見直しを受け入れた週）
+    const adjustDates = [profile.tdeeWeek, ...Object.entries(paceAnswers).filter(([, a]) => a === 'accepted').map(([w]) => w)].filter((x): x is string => !!x);
+    const last = adjustDates.sort().slice(-1)[0];
+    const daysSinceAdjust = last ? Math.floor((now.getTime() - new Date(last).getTime()) / 86400000) : null;
     const eta = (p: number) => (avg !== null && goal !== null ? etaLabel(etaTo(avg, goal, p, now, dir)) : null);
     return {
       avg,
@@ -173,7 +178,7 @@ export function useWeightStats(now: Date): WeightStats {
       left: avg !== null && goal !== null ? Math.max(0, dir === 'down' ? avg - goal : goal - avg) : null,
       etaActual: pace !== null ? eta(pace) : null,
       etaPlanned: eta(planned),
-      suggestion: suggestPace({ planned, actual: pace, answeredThisWeek: paceAnswers[weekKey] !== undefined, loggedDays, room, intakeRatio }),
+      suggestion: suggestPace({ planned, actual: pace, answeredThisWeek: paceAnswers[weekKey] !== undefined, loggedDays, room, intakeRatio, previous: previousPace, daysSinceAdjust }),
       weekKey,
       paceLine: pace !== null ? `直近2週 ${signed1(pace)}kg/週（予定 ${signed1(planned)}）` : null,
     };

@@ -80,6 +80,16 @@ export async function signInWithApple(): Promise<AuthResult> {
   }
 }
 
+/** アカウントを削除する（サーバー上のバックアップも一緒に消える）。端末の記録は別。 */
+export async function deleteAccount(): Promise<{ ok: boolean; error?: string }> {
+  const c = supabase();
+  if (!c) return { ok: false, error: NOT_CONFIGURED };
+  const { error } = await c.functions.invoke('delete-account', { method: 'POST' });
+  if (error) return { ok: false, error: 'アカウントを削除できませんでした。通信を確かめて、もう一度お試しください。' };
+  await signOut();
+  return { ok: true };
+}
+
 export async function signOut() {
   await supabase()?.auth.signOut();
 }

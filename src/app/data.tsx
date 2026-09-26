@@ -99,7 +99,7 @@ export default function DataScreen() {
           <>
             <View style={{ marginTop: 22 }}><SectionLabel>開発用</SectionLabel></View>
             <View style={{ marginTop: 8 }}>
-              <OutlineButton label="サンプルデータを入れる（5週間分）" onPress={() => run(async () => { await insertSampleData(); return 'サンプルを入れました。'; })} />
+              <OutlineButton label="サンプルデータを入れる（3週間分）" onPress={() => run(async () => { await insertSampleData(); return 'サンプルを入れました。'; })} />
             </View>
           </>
         )}

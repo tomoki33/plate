@@ -192,6 +192,7 @@ export default function ReviewScreen() {
                 yAxisOffset={e1Lo}
                 maxValue={e1Hi - e1Lo}
                 noOfSections={4}
+                yAxisLabelTexts={Array.from({ length: 5 }, (_, i) => String(Math.round(e1Lo + (i * (e1Hi - e1Lo)) / 4)))}
                 hideRules
                 yAxisThickness={0}
                 xAxisColor={color.line}
@@ -234,6 +235,7 @@ export default function ReviewScreen() {
               yAxisOffset={wc.lo}
               maxValue={wc.hi - wc.lo}
               noOfSections={4}
+              yAxisLabelTexts={Array.from({ length: 5 }, (_, i) => (wc.lo + (i * (wc.hi - wc.lo)) / 4).toFixed(1))}
               hideRules
               yAxisThickness={0}
               xAxisColor={color.line}

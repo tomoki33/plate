@@ -1,9 +1,11 @@
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Platform, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Chip, ListRow, N, Notice, OutlineButton, SectionLabel, Segmented, NumberStepper, T, color, hairline } from '@/design-system';
+import { DaySpread } from '../../components/DaySpread';
 import { useNow } from '../../components/useNow';
+import { computeTargets } from '../../domain/engine';
 import { DAY_LABELS, DAY_TYPE_JP, type DayType } from '../../domain/types';
 import { ACTIVITY_LEVELS, GOAL_JP, checkWarnings, paceOptions, type Goal } from '../../domain/nutrition';
 import { readBodyComposition } from '../../services/healthkit';
@@ -24,6 +26,15 @@ export default function SettingsScreen() {
   const { profile } = w;
   const [editDay, setEditDay] = useState<number | null>(null);
   const [hk, setHk] = useState<string | null>(null);
+
+  // 高い日・通常の日・オフの日の1日あたり kcal（日タイプ連動を使った場合の値）
+  const dayKcal = useMemo(() => {
+    const types: DayType[] = w.weekPlan.map((id) => templateType(w.templates, id));
+    const orig = computeTargets({ weekKcal: w.weekKcal, coef: profile.coef, pk: profile.pk, weight: w.weight, todayIndex: 0, plan: types, todayType: null, linked: true }).orig;
+    const pick = (t: DayType, fallback: number) => orig.find((d) => d.type === t)?.kcal ?? fallback;
+    const normal = pick('normal', Math.round(w.weekKcal / 7));
+    return { high: pick('high', Math.round(normal * profile.coef.high)), normal, off: pick('off', Math.round(normal * profile.coef.off)) };
+  }, [w.weekPlan, w.templates, w.weekKcal, w.weight, profile.coef, profile.pk]);
 
   const warnings = checkWarnings(profile, w.weight, w.weekKcal, now);
   const opts = paceOptions(profile.goal, w.weight);
@@ -87,12 +98,15 @@ export default function SettingsScreen() {
       </View>
       <T size={11} c={color.sub} style={{ marginTop: 6 }}>基本情報を変えると、維持カロリーの推定は式から出し直します。</T>
 
-      <View style={{ marginTop: 22 }}><SectionLabel>日タイプ係数</SectionLabel></View>
-      {(['high', 'normal', 'off'] as const).map((t) => (
-        <ListRow key={t} title={DAY_TYPE_JP[t]} dot={typeColor(t)} meta={`${fmt(w.plan.days.find((d) => d.type === t)?.kcal ?? 0)} kcal/日`} minHeight={60} right={<NumberStepper value={profile.coef[t]} onChange={(v) => st.setCoefTo(t, v)} step={0.05} min={0.6} max={1.4} decimals={2} width={52} accessibilityLabel={`${DAY_TYPE_JP[t]}の係数`} />} />
-      ))}
-      <ListRow title="P係数（g/kg）" dot={color.P} meta={`P ${w.today.P}g/日（毎日同じ）`} minHeight={60} right={<NumberStepper value={profile.pk} onChange={(v) => st.setPkTo(v)} step={0.1} min={1.6} max={3} decimals={1} width={52} accessibilityLabel="P係数" />} />
-      {!w.features.linkedTargets && <T size={11} c={color.sub} style={{ marginTop: 6 }}>日タイプ係数は、有料プラン（体験中を含む）で目標に反映されます。</T>}
+      <DaySpread
+        coef={profile.coef}
+        kcal={dayKcal}
+        pk={profile.pk}
+        weight={w.weight}
+        linked={w.features.linkedTargets}
+        onCoef={(c) => st.setCoefs(c)}
+        onPk={(v) => st.setPkTo(v)}
+      />
 
       <View style={{ marginTop: 22 }}><SectionLabel>週間スケジュール</SectionLabel></View>
       {w.weekPlan.map((id, i) => {

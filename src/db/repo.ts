@@ -331,6 +331,18 @@ export async function lastSessions(limit: number) {
   return db.select().from(s.workoutSession).where(alive(s.workoutSession)).orderBy(desc(s.workoutSession.startedAt)).limit(limit);
 }
 
+// ---------------------------------------------------------------- 記録だけ消す（開発用のサンプル投入の前）
+
+/** 体重・食事・トレ・目標の履歴・1日ごとの入力回数と日タイプを消す。プロフィールや設定は残す */
+export async function clearLogs() {
+  await db.delete(s.mealEntry);
+  await db.delete(s.bodyLog);
+  await db.delete(s.workoutSet);
+  await db.delete(s.workoutSession);
+  await db.delete(s.dayTarget);
+  await db.delete(s.kv).where(or(sql`${s.kv.key} LIKE 'ai:%'`, sql`${s.kv.key} LIKE 'dt:%'`)!);
+}
+
 // ---------------------------------------------------------------- 全消去（データ削除）
 
 export async function wipeUserData() {

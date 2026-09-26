@@ -105,3 +105,31 @@ describe('TDEEの実データ補正', () => {
     expect(weightTrend({ [k(day(0))]: 70, [k(day(-1))]: 71, [k(day(-2))]: 72 }, day(0))).toBeCloseTo(71);
   });
 });
+
+import { SPREAD_PRESETS, coefFromPercents, dailyProtein, matchSpreadPreset, spreadPercents } from './nutrition';
+
+describe('日ごとの食べる量', () => {
+  it('標準は設計書の初期値（高1.15／オフ0.85）', () => {
+    expect(SPREAD_PRESETS.standard).toMatchObject({ high: 1.15, off: 0.85 });
+    expect(matchSpreadPreset({ high: 1.15, normal: 1, off: 0.85 })).toBe('standard');
+  });
+  it('3段階のどれに当たるか、外れたら null', () => {
+    expect(matchSpreadPreset({ high: 1.08, normal: 1, off: 0.92 })).toBe('small');
+    expect(matchSpreadPreset({ high: 1.25, normal: 1, off: 0.75 })).toBe('large');
+    expect(matchSpreadPreset({ high: 1.2, normal: 1, off: 0.85 })).toBeNull();
+    expect(matchSpreadPreset({ high: 1.15, normal: 1.1, off: 0.85 })).toBeNull();
+  });
+  it('係数と%を行き来できる', () => {
+    expect(spreadPercents({ high: 1.15, normal: 1, off: 0.85 })).toEqual({ high: 15, off: 15 });
+    expect(coefFromPercents(15, 15)).toEqual({ high: 1.15, normal: 1, off: 0.85 });
+    expect(coefFromPercents(20, 10)).toEqual({ high: 1.2, normal: 1, off: 0.9 });
+  });
+  it('%は範囲に収める（高い日 0〜+40、オフ 0〜−40）', () => {
+    expect(coefFromPercents(80, 90)).toEqual({ high: 1.4, normal: 1, off: 0.6 });
+    expect(coefFromPercents(-5, -5)).toEqual({ high: 1, normal: 1, off: 1 });
+  });
+  it('1日のたんぱく質 = 体重 × P係数', () => {
+    expect(dailyProtein(71.6, 2.2)).toBe(158);
+    expect(dailyProtein(70, 2.2)).toBe(154);
+  });
+});

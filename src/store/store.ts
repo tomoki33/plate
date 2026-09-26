@@ -91,6 +91,7 @@ interface State {
   updateProfile(patch: Partial<Pick<ProfileData, 'sex' | 'birthYear' | 'heightCm' | 'activity'>> & { goal?: Goal; pace?: number }, weightKg: number): void;
   setCoef(t: keyof Coef, delta: number): void;
   setCoefTo(t: keyof Coef, value: number): void;
+  setCoefs(c: Coef): void;
   setPk(delta: number): void;
   setPkTo(value: number): void;
   maybeUpdateTdee(now: Date): void;
@@ -270,6 +271,10 @@ export const useStore = create<State>()((set, get) => {
     },
     setCoefTo(t, value) {
       set((s) => ({ profile: { ...s.profile, coef: { ...s.profile.coef, [t]: Math.round(Math.min(1.4, Math.max(0.6, value)) * 100) / 100 } } }));
+      saveProfileNow();
+    },
+    setCoefs(c) {
+      set((s) => ({ profile: { ...s.profile, coef: { high: c.high, normal: c.normal, off: c.off } } }));
       saveProfileNow();
     },
     setPkTo(value) {

@@ -12,6 +12,5 @@ export { PrimaryButton, OutlineButton, StepButton } from './components/Button';
 export { Bar, Hairline } from './components/Bar';
 export { Sheet } from './components/Sheet';
 export { Segmented, Stepper, ListRow, Chip, Field, Notice } from './components/Controls';
-export { NumberField, NumberStepper } from './components/NumberField';
-export { parseNumber, fitNumber } from './components/numberParse';
-export type { NumberFieldProps, NumberStepperProps } from './components/NumberField';
+export { NumberStepper } from './components/NumberStepper';
+export type { NumberStepperProps } from './components/NumberStepper';

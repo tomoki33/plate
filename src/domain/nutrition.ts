@@ -146,3 +146,45 @@ export function correctTdee(inp: CorrectionInput): CorrectionResult {
   const hi = inp.prevTdee * (1 + MAX_STEP);
   return { tdee: Math.round(Math.min(hi, Math.max(lo, blended))), applied: true, measured: Math.round(measured) };
 }
+
+// ---- 日ごとの食べる量（日タイプ係数を、利用者向けに言い換えたもの） ----
+
+export type SpreadPreset = 'small' | 'standard' | 'large';
+
+/**
+ * 「差を小さく／標準／差を大きく」。通常の日を基準(1.00)に、高い日とオフの日をどれだけ動かすか。
+ * 標準は設計書の初期値（高 1.15／オフ 0.85）。
+ */
+export const SPREAD_PRESETS: Record<SpreadPreset, { label: string; high: number; off: number }> = {
+  small: { label: '差を小さく', high: 1.08, off: 0.92 },
+  standard: { label: '標準', high: 1.15, off: 0.85 },
+  large: { label: '差を大きく', high: 1.25, off: 0.75 },
+};
+
+export const SPREAD_LIMITS = { highMax: 40, offMax: 40 } as const;
+
+const near = (a: number, b: number) => Math.abs(a - b) < 0.005;
+
+/** いまの係数がどの3段階に当てはまるか（細かく調整して外れたら null） */
+export function matchSpreadPreset(c: { high: number; normal: number; off: number }): SpreadPreset | null {
+  if (!near(c.normal, 1)) return null;
+  for (const [k, p] of Object.entries(SPREAD_PRESETS) as [SpreadPreset, (typeof SPREAD_PRESETS)[SpreadPreset]][]) {
+    if (near(c.high, p.high) && near(c.off, p.off)) return k;
+  }
+  return null;
+}
+
+/** 通常の日を基準にした増減（%）。高い日は +、オフの日は − */
+export function spreadPercents(c: { high: number; normal: number; off: number }): { high: number; off: number } {
+  return { high: Math.round((c.high / c.normal - 1) * 100), off: Math.round((1 - c.off / c.normal) * 100) };
+}
+
+/** 増減（%）から係数へ。通常の日は 1.00 に固定する */
+export function coefFromPercents(highPct: number, offPct: number): { high: number; normal: number; off: number } {
+  const h = Math.min(SPREAD_LIMITS.highMax, Math.max(0, Math.round(highPct)));
+  const o = Math.min(SPREAD_LIMITS.offMax, Math.max(0, Math.round(offPct)));
+  return { high: Math.round((1 + h / 100) * 100) / 100, normal: 1, off: Math.round((1 - o / 100) * 100) / 100 };
+}
+
+/** 1日のたんぱく質（g）。体重 × P係数 */
+export const dailyProtein = (weightKg: number, pk: number) => Math.round(weightKg * pk);

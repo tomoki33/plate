@@ -23,7 +23,7 @@ npm run typecheck
 
 | パス | 内容 |
 |---|---|
-| `src/app/` | 画面（expo-router）。`(tabs)/` が今日・トレ・レビュー・設定。`onboarding`、`paywall`、`data`、`my-foods`、`my-sets`、`template/[id]` |
+| `src/app/` | 画面（expo-router）。`(tabs)/` が今日・トレ・レビュー・設定。`login`、`onboarding`、`paywall`、`data`、`my-foods`、`my-sets`、`template/[id]` |
 | `src/domain/` | 純粋なロジック（React・Expo に依存しない。テストの中心）。`engine.ts` 目標エンジン、`nutrition.ts` プロフィール→TDEE→週合計・ペース・警告・実データ補正、`training.ts` ボリューム・推定1RM、`foodSearch.ts` 食品検索と別名辞書、`entitlement.ts` 無料／有料、`review.ts` 週次集計、`defaults.ts` 初期の種目とテンプレート |
 | `src/db/` | SQLite + Drizzle。`schema.ts`（設計書のテーブル）、`client.ts`、`migrate.ts`、`seed.ts`（成分表・種目などの初期投入）、`repo.ts`（読み書き） |
 | `src/store/` | Zustand。`store.ts`（状態と操作。変更は SQLite に書き込む）、`selectors.ts`（週・今日の派生値） |
@@ -46,9 +46,13 @@ npm run typecheck
 - 体重の7日移動平均、Apple ヘルスケアの読み込み（コードのみ）、週次レビュー（推定1RM・体重トレンド・平均PFC・種目別グラフ、無料は直近2週）。
 - 設定：目的・ペース、基本情報、係数、週間スケジュール、テンプレート、マイ食品。
 - 無料／有料の機能差、14日の無料体験、CSV書き出し、データ削除、ダークモード。
+- ログイン画面（`design_handoff_plate 2` の案11c）：Apple／Google／メール（6桁コード）／「ログインせずに始める」。起動画面（`assets/splash-login.png`）からそのまま続いて見える。ログインせずに始めても全機能をローカルで使え、あとから設定で「ログイン」できる。ログイン済みで別端末にバックアップがあれば、オンボーディングで復元できる。
 
 **設定が要る・未検証のもの**（コードはあるが、鍵・アカウント・実機がないので動作確認していない）
-- **Supabase**（ログイン・バックアップ）：`supabase/migrations/0001_backups.sql` を適用し、Apple プロバイダを有効にして `.env.local` に URL とキーを入れる。
+- **Supabase**（ログイン・バックアップ）：`supabase/migrations/0001_backups.sql` を適用し、`.env.local` に URL とキーを入れる。ログイン方法ごとの設定：
+  - **Apple**：Authentication → Providers で Apple を有効にする（iOS のネイティブの ID トークンで `signInWithIdToken`）。
+  - **Google**：Providers で Google を有効にし、Redirect URLs に `plate://auth-callback`（開発中は Expo の URL）を追加する。ブラウザで OAuth を開いて戻る方式。
+  - **メール（6桁コード）**：Email Templates の「Magic Link」テンプレートに `{{ .Token }}` を入れる（リンクではなくコードが届く）。
 - **AI入力**：`supabase/functions/estimate-meal` をデプロイ（`ANTHROPIC_API_KEY` を secrets に）。1日30回の上限はサーバー側で止める。無料の3回は端末側で数えている（無料／有料のサーバー判定には RevenueCat の webhook が要る。未対応）。原価の実測は未実施（設計書の未決事項）。
 - **RevenueCat**：Entitlement `plate_pro` と月額／年額の商品を作り、公開SDKキーを `.env.local` に。
 - **HealthKit**：開発ビルドで動作確認が必要。
@@ -64,6 +68,8 @@ npm run typecheck
 - Web 版でグラフ用ライブラリが出す開発用の警告（`Unknown event handler property`）は、Web の開発画面では非表示にしている。ネイティブでは出ない。
 - 週間スケジュールの日タイプは、テンプレートの既定値。個別の日だけ変えたいときは、トレタブの「予定を変える」「今日は休む」を使う。
 - 開発ビルドでは、データ画面に「サンプルデータを入れる（5週間分）」が出る。本番ビルドには出ない。
+- 開発ビルドで Supabase が未設定のときだけ、メールログインは通信せずに模擬で通る（コード `123456`）。画面の流れを試すためで、設定済みの環境や本番では使われない。
+- 起動画面の全画面表示は、Expo の `enableFullScreenImage_legacy`（将来なくなる予定の指定）を使っている。
 
 ## デザインシステムの運用
 - 色・余白・フォントは `src/design-system/tokens.ts` にだけ書く。画面に色コードを直書きしない（ライト／ダークで切り替わる）。

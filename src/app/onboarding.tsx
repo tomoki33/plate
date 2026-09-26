@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Chip, ListRow, N, Notice, PrimaryButton, SectionLabel, Segmented, Stepper, T, color, hairline, radius } from '@/design-system';
 import { ACTIVITY_LEVELS, DEFAULT_PROFILE, GOAL_JP, checkWarnings, clampPace, defaultPace, initialTdee, paceOptions, weekKcalOf, type Goal, type Sex } from '../domain/nutrition';
 import { TRIAL_DAYS } from '../domain/entitlement';
+import { latestBackupAt, restoreLatest } from '../services/backup';
 import { useStore } from '../store/store';
 
 const fmt = (n: number) => Math.round(n).toLocaleString();
@@ -12,6 +13,17 @@ const fmt = (n: number) => Math.round(n).toLocaleString();
 export default function Onboarding() {
   const insets = useSafeAreaInsets();
   const complete = useStore((s) => s.completeOnboarding);
+  const reload = useStore((s) => s.reload);
+  const account = useStore((s) => s.account);
+  const [backupAt, setBackupAt] = useState<number | null>(null);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+
+  // ログイン済みで、バックアップがあれば、復元できる（機種変更）
+  useEffect(() => {
+    if (!account) return;
+    void latestBackupAt().then(setBackupAt).catch(() => {});
+  }, [account]);
   const [sex, setSex] = useState<Sex>(DEFAULT_PROFILE.sex);
   const [birthYear, setBirthYear] = useState(1995);
   const [heightCm, setHeightCm] = useState(172);
@@ -38,6 +50,25 @@ export default function Onboarding() {
     <ScrollView style={{ flex: 1, backgroundColor: color.bg }} contentContainerStyle={{ paddingTop: insets.top + 24, paddingBottom: insets.bottom + 32, paddingHorizontal: 22 }}>
       <T size={28} w={900} style={{ letterSpacing: 3 }}>PLATE</T>
       <T size={13} c={color.sub} style={{ marginTop: 4 }}>今日のトレで、今日の一皿が決まる。</T>
+      {backupAt !== null && (
+        <View style={{ marginTop: 20, padding: 14, borderRadius: radius.card, backgroundColor: color.brandPale, gap: 8 }}>
+          <T size={13} w={700}>バックアップがあります</T>
+          <T size={12} c={color.badgeFg}>{new Date(backupAt).toLocaleString('ja-JP')} の記録を、この端末に戻せます。</T>
+          <PrimaryButton
+            label={restoring ? '復元中…' : 'バックアップから復元する'}
+            disabled={restoring}
+            onPress={async () => {
+              setRestoring(true);
+              setRestoreError(null);
+              const r = await restoreLatest();
+              if (r.ok) await reload();
+              else setRestoreError(r.error ?? '復元できませんでした。');
+              setRestoring(false);
+            }}
+          />
+          {restoreError ? <T size={12} c={color.brandText}>{restoreError}</T> : null}
+        </View>
+      )}
       <T size={13} style={{ marginTop: 20, lineHeight: 21 }}>あなたの週のカロリーの目安を出すために、体のことを少しだけ教えてください。あとから設定で変えられます。</T>
 
       <View style={{ marginTop: 22 }}><SectionLabel>基本情報</SectionLabel></View>

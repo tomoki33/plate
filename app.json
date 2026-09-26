@@ -49,6 +49,22 @@
           "NSHealthUpdateUsageDescription": "PLATE は、ヘルスケアへの書き込みをしません。",
           "background": false
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#1F1712",
+          "image": "./assets/splash-login.png",
+          "resizeMode": "cover",
+          "ios": {
+            "enableFullScreenImage_legacy": true
+          },
+          "android": {
+            "image": "./assets/splash-icon.png",
+            "imageWidth": 200,
+            "backgroundColor": "#1F1712"
+          }
+        }
       ]
     ],
     "scheme": "plate",

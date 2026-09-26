@@ -69,6 +69,11 @@ interface State {
   dayTypes: Record<string, DayType>;
   trialStartedAt: number | null;
   paid: boolean;
+  /** 「ログインせずに始める」を選んだか */
+  loginSkipped: boolean;
+  account: { userId: string; email: string | null } | null;
+  /** 起動時にログイン状態を確かめ終えたか（確かめるまでは、どの画面を出すか決められない） */
+  authChecked: boolean;
   lastTargets: Record<string, { dayType: DayType; kcal: number; reason: string }>;
 
   session: Session | null;
@@ -128,6 +133,10 @@ interface State {
   skipRest(): void;
   setDoneOpen(v: boolean): void;
 
+  // ログイン
+  skipLogin(): void;
+  setAccount(a: State['account']): void;
+
   // 課金
   setPaid(v: boolean): void;
 
@@ -157,6 +166,9 @@ export const useStore = create<State>()((set, get) => {
     dayTypes: {},
     trialStartedAt: null,
     paid: false,
+    loginSkipped: false,
+    account: null,
+    authChecked: false,
     lastTargets: {},
     session: null,
     rest: 0,
@@ -196,6 +208,7 @@ export const useStore = create<State>()((set, get) => {
         dayTypes,
         trialStartedAt: d.kv.trial_started_at ? Number(d.kv.trial_started_at) : null,
         paid: d.kv.paid === '1',
+        loginSkipped: d.kv.login_skipped === '1',
         lastTargets: d.lastTargets,
       });
     },
@@ -595,6 +608,14 @@ export const useStore = create<State>()((set, get) => {
     },
     setDoneOpen(v) {
       set({ doneOpen: v });
+    },
+
+    skipLogin() {
+      set({ loginSkipped: true });
+      persist(repo.setKv('login_skipped', '1'));
+    },
+    setAccount(a) {
+      set({ account: a, authChecked: true });
     },
 
     setPaid(v) {

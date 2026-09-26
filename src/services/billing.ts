@@ -97,3 +97,15 @@ export async function restorePurchases(): Promise<boolean> {
     return false;
   }
 }
+
+/** ログインしたら、購入を Supabase のユーザーに結びつける（機種変更でも購入が引き継がれる） */
+export async function identifyBilling(userId: string | null) {
+  const p = lib();
+  if (!p || !configured) return;
+  try {
+    if (userId) await p.logIn(userId);
+    else await p.logOut();
+  } catch {
+    // 失敗しても、端末の購入としては動く
+  }
+}

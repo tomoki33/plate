@@ -4,7 +4,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { ListRow, Notice, OutlineButton, PrimaryButton, SectionLabel, T, color } from '@/design-system';
 import { backupNow, latestBackupAt, restoreLatest } from '../services/backup';
 import { shareCsv } from '../services/exportCsv';
-import { currentSession, signInWithApple, signOut, supabaseConfigured } from '../services/supabase';
+import { signOut, supabaseConfigured } from '../services/supabase';
 import { insertSampleData } from '../dev/sampleData';
 import { useStore } from '../store/store';
 
@@ -15,7 +15,8 @@ export default function DataScreen() {
   const router = useRouter();
   const reload = useStore((s) => s.reload);
   const erase = useStore((s) => s.eraseAllData);
-  const [signedIn, setSignedIn] = useState(false);
+  const account = useStore((s) => s.account);
+  const signedIn = !!account;
   const [lastBackup, setLastBackup] = useState<number | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -23,13 +24,12 @@ export default function DataScreen() {
   const cloud = supabaseConfigured();
 
   const refresh = async () => {
-    const s = await currentSession();
-    setSignedIn(!!s);
-    setLastBackup(s ? await latestBackupAt() : null);
+    setLastBackup(signedIn ? await latestBackupAt() : null);
   };
   useEffect(() => {
     if (cloud) void refresh();
-  }, [cloud]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cloud, signedIn]);
 
   const run = async (fn: () => Promise<string | null>) => {
     setBusy(true);
@@ -59,11 +59,12 @@ export default function DataScreen() {
           <View style={{ marginTop: 8 }}><Notice tone="plain">バックアップは、ログインの設定（Supabase）が済むと使えます。記録は、いまはこの端末の中だけにあります。</Notice></View>
         ) : !signedIn ? (
           <View style={{ marginTop: 8, gap: 8 }}>
-            <T size={12} c={color.sub}>Apple でログインすると、機種変更しても記録を戻せます。</T>
-            <PrimaryButton label="Apple でログイン" disabled={busy} onPress={() => run(async () => { const r = await signInWithApple(); await refresh(); return r.ok ? null : (r.error ?? null); })} />
+            <T size={12} c={color.sub}>ログインすると、機種変更しても記録を戻せます。</T>
+            <PrimaryButton label="ログイン" onPress={() => router.push('/login')} />
           </View>
         ) : (
           <View style={{ marginTop: 8, gap: 8 }}>
+            <T size={12} c={color.sub}>{account?.email ?? 'ログイン中'}</T>
             <T size={12} c={color.sub}>最後のバックアップ：{lastBackup ? when(lastBackup) : 'まだありません'}</T>
             <PrimaryButton label="いまバックアップする" disabled={busy} onPress={() => run(async () => { const r = await backupNow(); await refresh(); return r.ok ? 'バックアップしました。' : (r.error ?? 'できませんでした。'); })} />
             <OutlineButton
@@ -74,7 +75,7 @@ export default function DataScreen() {
                 void run(async () => { const r = await restoreLatest(); if (r.ok) await reload(); return r.ok ? '復元しました。' : (r.error ?? 'できませんでした。'); });
               }}
             />
-            <Pressable accessibilityRole="button" onPress={() => run(async () => { await signOut(); await refresh(); return 'ログアウトしました。'; })} style={{ minHeight: 44, justifyContent: 'center' }}>
+            <Pressable accessibilityRole="button" onPress={() => run(async () => { await signOut(); return 'ログアウトしました。'; })} style={{ minHeight: 44, justifyContent: 'center' }}>
               <T size={13} c={color.sub}>ログアウト</T>
             </Pressable>
           </View>

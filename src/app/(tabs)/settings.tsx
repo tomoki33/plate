@@ -49,6 +49,15 @@ export default function SettingsScreen() {
         onPress={() => router.push('/paywall')}
       />
 
+      <View style={{ marginTop: 22 }}><SectionLabel>アカウント</SectionLabel></View>
+      <ListRow
+        title={st.account ? (st.account.email ?? 'ログイン中') : 'ログインしていません'}
+        meta={st.account ? 'バックアップと機種変更の引き継ぎができます' : '記録はこの端末に保存されています'}
+        right={<T size={13} w={700}>{st.account ? '管理 ›' : 'ログイン ›'}</T>}
+        onPress={() => router.push(st.account ? '/data' : '/login')}
+        minHeight={60}
+      />
+
       <View style={{ marginTop: 22 }}><SectionLabel>目標</SectionLabel></View>
       <View style={{ marginTop: 8 }}>
         <Segmented value={profile.goal} onChange={(g: Goal) => st.updateProfile({ goal: g }, w.weight)} options={(['cut', 'maintain', 'bulk'] as const).map((g) => ({ value: g, label: GOAL_JP[g] }))} />

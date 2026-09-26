@@ -3,7 +3,7 @@ import { computeTargets } from '../domain/engine';
 import { addDays, dateKey, weekdayIndex, weekStart } from '../domain/dates';
 import { featuresOf, planOf, trialDaysLeft, type Features, type Plan } from '../domain/entitlement';
 import type { MealEntry, SessionRecord, WorkoutTemplate } from '../domain/models';
-import { weekKcalOf } from '../domain/nutrition';
+import { ageOf, bmr, weekKcalOf } from '../domain/nutrition';
 import { avg7, etaLabel, etaTo, paceKgPerWeek, signed1, suggestPace, weekDiff, weightForProtein, type PaceSuggestion } from '../domain/weight';
 import type { DayTarget, DayType, Pfc } from '../domain/types';
 import { useStore } from './store';
@@ -138,6 +138,7 @@ export function useWeightStats(now: Date): WeightStats {
   const weights = useStore((s) => s.weights);
   const profile = useStore((s) => s.profile);
   const paceAnswers = useStore((s) => s.paceAnswers);
+  const meals = useStore((s) => s.meals);
   return useMemo(() => {
     const avg = avg7(weights, now);
     const pace = paceKgPerWeek(weights, now);
@@ -145,6 +146,13 @@ export function useWeightStats(now: Date): WeightStats {
     const goal = profile.goalWeightKg;
     const dir = profile.goal === 'bulk' ? 'up' : 'down';
     const weekKey = dateKey(weekStart(now));
+    // 直近14日のうち、食事を記録した日数（記録が足りない週は、提案しない）
+    const mealDates = new Set(meals.map((m) => m.date));
+    let loggedDays = 0;
+    for (let i = 0; i < 14; i++) if (mealDates.has(dateKey(addDays(now, -i)))) loggedDays++;
+    // 減量で週の合計を下げられる余地（基礎代謝×7日を下回らない範囲）
+    const floor = 7 * Math.max(1200, bmr(profile, avg ?? 70, ageOf(profile.birthYear, now)));
+    const room = weekKcalOf(profile.tdee, profile.pace) + profile.weekAdjustKcal - floor;
     const eta = (p: number) => (avg !== null && goal !== null ? etaLabel(etaTo(avg, goal, p, now, dir)) : null);
     return {
       avg,
@@ -155,9 +163,9 @@ export function useWeightStats(now: Date): WeightStats {
       left: avg !== null && goal !== null ? Math.max(0, dir === 'down' ? avg - goal : goal - avg) : null,
       etaActual: pace !== null ? eta(pace) : null,
       etaPlanned: eta(planned),
-      suggestion: suggestPace({ planned, actual: pace, answeredThisWeek: paceAnswers[weekKey] !== undefined }),
+      suggestion: suggestPace({ planned, actual: pace, answeredThisWeek: paceAnswers[weekKey] !== undefined, loggedDays, room }),
       weekKey,
       paceLine: pace !== null ? `直近2週 ${signed1(pace)}kg/週（予定 ${signed1(planned)}）` : null,
     };
-  }, [weights, profile.pace, profile.goalWeightKg, profile.goal, paceAnswers, now]);
+  }, [weights, profile, paceAnswers, meals, now]);
 }

@@ -69,32 +69,53 @@ export function etaLabel(e: Eta): string {
 
 // ---- ペースの見直し ----
 
-export const PACE_STEP_KCAL = 700;
+/** 提案の量の下限・上限（kcal/週）。遅れが大きいほど多く、ただし極端にはしない */
+export const PACE_MIN_KCAL = 300;
+export const PACE_MAX_KCAL = 1400;
+/** 遅れをすべて埋めようとはせず、半分だけ取り戻す（取り返そうとしすぎない） */
+export const PACE_CATCHUP = 0.5;
+export const KCAL_PER_KG_FAT = 7700;
+/** 直近14日のうち、食事を記録した日がこれ未満なら、提案しない（食べた量が分からないので、原因を判断できない） */
+export const PACE_MIN_LOGGED_DAYS = 10;
 
 export interface PaceSuggestion {
-  /** 週の合計に足す量（減量なら −700、増量なら +700） */
+  /** 週の合計に足す量（減量なら −、増量なら +）。100kcal単位 */
   deltaKcal: number;
   /** 画面に出す文 */
   message: string;
 }
 
+/** 遅れ（kg/週）から、週の合計を動かす量（kcal・正の値）。遅れ × 7700 × 0.5 を100単位に丸め、下限と上限に収める */
+export function suggestedStep(shortfallKgPerWeek: number): number {
+  const raw = shortfallKgPerWeek * KCAL_PER_KG_FAT * PACE_CATCHUP;
+  return Math.min(PACE_MAX_KCAL, Math.max(PACE_MIN_KCAL, Math.round(raw / 100) * 100));
+}
+
 /**
  * 7日平均の2週間の動きが、予定のペースより 0.1kg/週 以上遅いとき（増量のときは逆）に、週の合計の見直しを提案する。
- * 勝手には変えない。同じ週に答え済みなら出さない。
+ * - 提案の量は、遅れが大きいほど多い（300〜1,400kcal/週）
+ * - 直近14日の食事の記録が10日未満なら出さない
+ * - 減量で、週の合計が下限（基礎代謝×7日）を割るほどの提案はしない（room = 下げられる余地）
+ * - 勝手には変えない。同じ週に答え済みなら出さない
  * @param planned 予定のペース（kg/週。減量はマイナス）。0（維持）のときは出さない
  */
-export function suggestPace(input: { planned: number; actual: number | null; answeredThisWeek: boolean }): PaceSuggestion | null {
-  const { planned, actual, answeredThisWeek } = input;
+export function suggestPace(input: { planned: number; actual: number | null; answeredThisWeek: boolean; loggedDays: number; room?: number }): PaceSuggestion | null {
+  const { planned, actual, answeredThisWeek, loggedDays, room } = input;
   if (answeredThisWeek || actual === null || Math.abs(planned) < 0.05) return null;
+  if (loggedDays < PACE_MIN_LOGGED_DAYS) return null;
   const cutting = planned < 0;
-  const slower = cutting ? actual - planned >= 0.1 - 1e-9 : planned - actual >= 0.1 - 1e-9;
-  if (!slower) return null;
-  const delta = cutting ? -PACE_STEP_KCAL : PACE_STEP_KCAL;
-  const perDay = Math.round(PACE_STEP_KCAL / 7 / 10) * 10;
+  const shortfall = cutting ? actual - planned : planned - actual;
+  if (shortfall < 0.1 - 1e-9) return null;
+  let step = suggestedStep(shortfall);
+  if (cutting && room !== undefined) {
+    step = Math.min(step, Math.floor(room / 100) * 100);
+    if (step < PACE_MIN_KCAL) return null;
+  }
+  const perDay = Math.round(step / 7 / 10) * 10;
   const verb = cutting ? '減り' : '増え';
   return {
-    deltaKcal: delta,
-    message: `2週続けて、${verb}方が予定より遅めです（${signed1(actual)}kg/週、予定 ${signed1(planned)}）。週の合計を${PACE_STEP_KCAL}kcal${cutting ? '減らし' : '増やし'}ますか？（1日あたり約${cutting ? '−' : '+'}${perDay}kcal）`,
+    deltaKcal: cutting ? -step : step,
+    message: `2週続けて、${verb}方が予定より遅めです（${signed1(actual)}kg/週、予定 ${signed1(planned)}）。週の合計を${step.toLocaleString()}kcal${cutting ? '減らし' : '増やし'}ますか？（1日あたり約${cutting ? '−' : '+'}${perDay}kcal）`,
   };
 }
 

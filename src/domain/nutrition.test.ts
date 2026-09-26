@@ -114,7 +114,7 @@ describe('日ごとの食べる量', () => {
     expect(matchSpreadPreset({ high: 1.15, normal: 1, off: 0.85 })).toBe('standard');
   });
   it('3段階のどれに当たるか、外れたら null', () => {
-    expect(matchSpreadPreset({ high: 1.08, normal: 1, off: 0.92 })).toBe('small');
+    expect(matchSpreadPreset({ high: 1.07, normal: 1, off: 0.93 })).toBe('small');
     expect(matchSpreadPreset({ high: 1.25, normal: 1, off: 0.75 })).toBe('large');
     expect(matchSpreadPreset({ high: 1.2, normal: 1, off: 0.85 })).toBeNull();
     expect(matchSpreadPreset({ high: 1.15, normal: 1.1, off: 0.85 })).toBeNull();

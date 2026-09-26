@@ -50,6 +50,7 @@ export interface MealSet {
 }
 
 export type Slot = '朝' | '昼' | '間食' | '夜';
+export type InputType = 'set' | 'search' | 'text' | 'photo';
 
 /** 記録時の値をコピーして持つ（食品データを後で直しても過去の記録は変わらない） */
 export interface MealEntry extends Pfc {
@@ -62,6 +63,9 @@ export interface MealEntry extends Pfc {
   name: string;
   grams: number | null;
   ai: boolean;
+  /** 写真で記録した食事の写真（アプリ内のファイル）。なければ null */
+  photoUri: string | null;
+  inputType: InputType;
   createdAt: number;
 }
 
@@ -103,6 +107,9 @@ export interface ProfileData extends Profile {
   tdee: number;
   tdeeWeek: string | null;
   onboarded: boolean;
+  goalWeightKg: number | null;
+  /** 週の合計への調整（kcal）。ペースの見直しで受け入れたぶん */
+  weekAdjustKcal: number;
 }
 
 export type { Goal, Sex };

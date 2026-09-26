@@ -29,6 +29,10 @@ export const profile = sqliteTable('profile', {
   /** TDEEを最後に更新した週の月曜（yyyy-mm-dd） */
   tdeeWeek: text('tdee_week'),
   onboarded: integer('onboarded', { mode: 'boolean' }).notNull().default(false),
+  /** 目標体重（kg）。体重の詳細で「あと◯kg」と到達予測に使う */
+  goalWeightKg: real('goal_weight_kg'),
+  /** 週の合計への調整（kcal）。ペースの見直しで「週 −700kcal にする」を選んだぶん。取り消せる */
+  weekAdjustKcal: integer('week_adjust_kcal').notNull().default(0),
 });
 
 export const bodyLog = sqliteTable(
@@ -154,6 +158,10 @@ export const mealEntry = sqliteTable(
     f: real('f').notNull(),
     c: real('c').notNull(),
     ai: integer('ai', { mode: 'boolean' }).notNull().default(false),
+    /** 写真で記録した食事の写真（アプリ内に保存したファイル） */
+    photoUri: text('photo_uri'),
+    /** どの入力方法で記録したか（マイセット・検索・文章・写真） */
+    inputType: text('input_type', { enum: ['set', 'search', 'text', 'photo'] }).notNull().default('search'),
     createdAt: integer('created_at').notNull(),
   },
   (t) => [index('meal_entry_date_idx').on(t.date)],
@@ -174,6 +182,14 @@ export const dayTarget = sqliteTable(
   },
   (t) => [index('day_target_date_idx').on(t.date)],
 );
+
+/** ペースの見直しの提案に答えた記録。同じ週に2回出さないため（id は週の月曜の日付） */
+export const paceSuggestion = sqliteTable('pace_suggestion', {
+  ...base,
+  weekStart: text('week_start').notNull(),
+  deltaKcal: integer('delta_kcal').notNull(),
+  answer: text('answer', { enum: ['accepted', 'dismissed'] }).notNull(),
+});
 
 /** 1日のAI入力回数、課金状態のキャッシュなど */
 export const kv = sqliteTable('kv', {

@@ -3,7 +3,7 @@ import * as repo from '../db/repo';
 import { seedIfNeeded } from '../db/seed';
 import { addDays, dateKey, slotOf, weekStart } from '../domain/dates';
 import { DEFAULT_PROFILE, clampPace, correctTdee, defaultPace, defaultPk, initialTdee, type Goal, type Sex } from '../domain/nutrition';
-import type { Exercise, ExerciseLog, FoodItem, MealEntry, MealSet, ProfileData, SessionRecord, Slot, WorkoutTemplate } from '../domain/models';
+import type { Exercise, ExerciseLog, FoodItem, InputType, MealEntry, MealSet, ProfileData, SessionRecord, Slot, WorkoutTemplate } from '../domain/models';
 import { searchKey } from '../domain/foodSearch';
 import { bestSet, decideDayType, median, volumeScore, DEFAULT_MEDIAN_VOLUME } from '../domain/training';
 import type { Coef, DayType, Pfc } from '../domain/types';
@@ -46,9 +46,15 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined;
 let restTimer: ReturnType<typeof setInterval> | undefined;
 
 const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
+const WD = ['日', '月', '火', '水', '木', '金', '土'];
+/** 「9/25（金）」 */
+const dayLabelOf = (date: string) => {
+  const [y, m, d] = date.split('-').map(Number);
+  return `${m}/${d}（${WD[new Date(y, m - 1, d).getDay()]}）`;
+};
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
-const DEFAULT_PROFILE_DATA = (): ProfileData => ({ ...DEFAULT_PROFILE, pk: defaultPk(DEFAULT_PROFILE.goal), coef: { high: 1.15, normal: 1.0, off: 0.85 }, tdee: 2600, tdeeWeek: null, onboarded: false });
+const DEFAULT_PROFILE_DATA = (): ProfileData => ({ ...DEFAULT_PROFILE, pk: defaultPk(DEFAULT_PROFILE.goal), coef: { high: 1.15, normal: 1.0, off: 0.85 }, tdee: 2600, tdeeWeek: null, onboarded: false, goalWeightKg: null, weekAdjustKcal: 0 });
 
 interface State {
   ready: boolean;
@@ -72,10 +78,16 @@ interface State {
   paid: boolean;
   /** 「ログインせずに始める」を選んだか */
   loginSkipped: boolean;
-  account: { userId: string; email: string | null } | null;
+  account: { userId: string; email: string | null; provider: string } | null;
+  /** 最後にバックアップした時刻 */
+  lastBackupAt: number | null;
   /** 起動時にログイン状態を確かめ終えたか（確かめるまでは、どの画面を出すか決められない） */
   authChecked: boolean;
   lastTargets: Record<string, { dayType: DayType; kcal: number; reason: string }>;
+  /** ペースの見直しに答えた週（週の月曜 → 答え） */
+  paceAnswers: Record<string, 'accepted' | 'dismissed'>;
+  /** ヘルスケア連携（体重の自動取り込み）がオンか */
+  healthSync: boolean;
 
   session: Session | null;
   rest: number;
@@ -87,7 +99,7 @@ interface State {
   reload(): Promise<void>;
 
   // プロフィール
-  completeOnboarding(input: { sex: Sex; birthYear: number; heightCm: number; activity: number; goal: Goal; pace: number; weight: number }): void;
+  completeOnboarding(input: { sex: Sex; birthYear: number; heightCm: number; activity: number; goal: Goal; pace: number; weight: number; goalWeight?: number | null }): void;
   updateProfile(patch: Partial<Pick<ProfileData, 'sex' | 'birthYear' | 'heightCm' | 'activity'>> & { goal?: Goal; pace?: number }, weightKg: number): void;
   setCoef(t: keyof Coef, delta: number): void;
   setCoefTo(t: keyof Coef, value: number): void;
@@ -99,7 +111,7 @@ interface State {
 
   // 食事
   /** date を省くと今日、slot を省くと今の時刻の時間帯 */
-  addMealItems(groupName: string, items: MealItemInput[], opts?: { ai?: boolean; mealSetId?: string; date?: string; slot?: Slot }): string;
+  addMealItems(groupName: string, items: MealItemInput[], opts?: { ai?: boolean; mealSetId?: string; date?: string; slot?: Slot; inputType?: InputType; photoUri?: string | null }): string;
   /** 食事（同じ操作で追加したまとまり）の量と時間帯を直す。量は、その行の栄養を比例で計算し直す */
   updateMealGroup(groupId: string, patch: { slot?: Slot; grams?: Record<string, number> }): void;
   removeMealGroup(groupId: string): void;
@@ -109,8 +121,19 @@ interface State {
   saveMyFood(f: { id?: string; name: string; kcal: number; p: number; f: number; c: number; defaultG?: number | null; unitG?: number | null }): string;
   deleteMyFood(id: string): void;
 
+  // 目標体重・週の合計・ペースの見直し
+  setGoalWeight(kg: number): void;
+  /** 週の合計に増減を足す（取消できる）。kcal は週あたり */
+  addWeekAdjust(deltaKcal: number, toastText: string): void;
+  /** ペースの見直しの提案に答える。accepted なら週の合計を deltaKcal だけ動かす */
+  answerPaceSuggestion(weekStart: string, deltaKcal: number, answer: 'accepted' | 'dismissed', toastText?: string): void;
+
+  // ヘルスケア連携
+  setHealthSync(on: boolean): void;
+
   // 体重・日タイプ
   setWeight(date: string, kg: number, opts?: { source?: 'manual' | 'healthkit'; bodyFat?: number | null; silent?: boolean }): void;
+  deleteWeight(date: string): void;
   setDayType(date: string, t: DayType | null): void;
   consumeAi(date: string): void;
 
@@ -144,6 +167,7 @@ interface State {
   // ログイン
   skipLogin(): void;
   setAccount(a: State['account']): void;
+  setLastBackupAt(t: number): void;
 
   // 課金
   setPaid(v: boolean): void;
@@ -176,8 +200,11 @@ export const useStore = create<State>()((set, get) => {
     paid: false,
     loginSkipped: false,
     account: null,
+    lastBackupAt: null,
     authChecked: false,
     lastTargets: {},
+    paceAnswers: {},
+    healthSync: false,
     session: null,
     rest: 0,
     restMax: 120,
@@ -218,6 +245,9 @@ export const useStore = create<State>()((set, get) => {
         paid: d.kv.paid === '1',
         loginSkipped: d.kv.login_skipped === '1',
         lastTargets: d.lastTargets,
+        paceAnswers: d.paceAnswers,
+        healthSync: d.kv.health_sync === '1',
+        lastBackupAt: d.kv.last_backup_at ? Number(d.kv.last_backup_at) : null,
       });
     },
 
@@ -238,6 +268,8 @@ export const useStore = create<State>()((set, get) => {
         tdee: Math.round(initialTdee({ ...DEFAULT_PROFILE, ...input, pace }, input.weight, now)),
         tdeeWeek: null,
         onboarded: true,
+        goalWeightKg: input.goalWeight ?? null,
+        weekAdjustKcal: 0,
       };
       const isNewTrial = get().trialStartedAt === null;
       set({ profile, trialStartedAt: get().trialStartedAt ?? now.getTime() });
@@ -328,6 +360,8 @@ export const useStore = create<State>()((set, get) => {
         F: it.F,
         C: it.C,
         ai: !!opts.ai,
+        photoUri: opts.photoUri ?? null,
+        inputType: opts.inputType ?? (opts.mealSetId ? 'set' : 'search'),
         createdAt: now.getTime() + i,
       }));
       set((s) => ({ meals: [...s.meals, ...rows] }));
@@ -417,7 +451,7 @@ export const useStore = create<State>()((set, get) => {
       set((s) => ({ weights: { ...s.weights, [date]: kg }, weightSources: { ...s.weightSources, [date]: source }, bodyFat: opts.bodyFat != null ? { ...s.bodyFat, [date]: opts.bodyFat } : s.bodyFat }));
       persist(repo.saveBodyLog(uuid(), date, kg, source, opts.bodyFat ?? null));
       if (!opts.silent && source === 'manual')
-        get().showToast(`体重 ${kg.toFixed(1)}kg を記録`, () => {
+        get().showToast(`${dayLabelOf(date)} ${kg.toFixed(1)}kg を記録`, () => {
           set((s) => {
             const w = { ...s.weights };
             if (prev === undefined) delete w[date];
@@ -427,6 +461,64 @@ export const useStore = create<State>()((set, get) => {
           if (prev === undefined) persist(repo.deleteBodyLog(date, 'manual'));
           else persist(repo.saveBodyLog(uuid(), date, prev, 'manual', null));
         });
+    },
+
+    deleteWeight(date) {
+      const prev = get().weights[date];
+      if (prev === undefined) return;
+      const prevSource = get().weightSources[date] ?? 'manual';
+      const prevFat = get().bodyFat[date] ?? null;
+      set((s) => {
+        const w = { ...s.weights };
+        delete w[date];
+        const src = { ...s.weightSources };
+        delete src[date];
+        return { weights: w, weightSources: src };
+      });
+      persist(repo.deleteWeightOn(date));
+      get().showToast(`${date.slice(5).replace('-', '/')} の体重の記録を削除`, () => {
+        set((s) => ({ weights: { ...s.weights, [date]: prev }, weightSources: { ...s.weightSources, [date]: prevSource } }));
+        persist(repo.saveBodyLog(uuid(), date, prev, prevSource, prevFat));
+      });
+    },
+
+    setGoalWeight(kg) {
+      set((s) => ({ profile: { ...s.profile, goalWeightKg: Math.round(Math.min(200, Math.max(30, kg)) * 10) / 10 } }));
+      saveProfileNow();
+    },
+
+    addWeekAdjust(delta, toastText) {
+      const before = get().profile.weekAdjustKcal;
+      set((s) => ({ profile: { ...s.profile, weekAdjustKcal: before + delta } }));
+      saveProfileNow();
+      get().showToast(toastText, () => {
+        set((s) => ({ profile: { ...s.profile, weekAdjustKcal: before } }));
+        saveProfileNow();
+      });
+    },
+
+    answerPaceSuggestion(weekStart, delta, answer, toastText) {
+      set((s) => ({ paceAnswers: { ...s.paceAnswers, [weekStart]: answer } }));
+      persist(repo.savePaceAnswer(weekStart, delta, answer));
+      if (answer === 'accepted') {
+        const before = get().profile.weekAdjustKcal;
+        set((s) => ({ profile: { ...s.profile, weekAdjustKcal: before + delta } }));
+        saveProfileNow();
+        get().showToast(toastText ?? '週の合計を変更しました', () => {
+          set((s) => {
+            const a = { ...s.paceAnswers };
+            delete a[weekStart];
+            return { profile: { ...s.profile, weekAdjustKcal: before }, paceAnswers: a };
+          });
+          saveProfileNow();
+          persist(repo.deletePaceAnswer(weekStart));
+        });
+      }
+    },
+
+    setHealthSync(on) {
+      set({ healthSync: on });
+      persist(on ? repo.setKv('health_sync', '1') : repo.deleteKv('health_sync'));
     },
 
     setDayType(date, t) {
@@ -661,6 +753,10 @@ export const useStore = create<State>()((set, get) => {
     skipLogin() {
       set({ loginSkipped: true });
       persist(repo.setKv('login_skipped', '1'));
+    },
+    setLastBackupAt(t) {
+      set({ lastBackupAt: t });
+      persist(repo.setKv('last_backup_at', String(t)));
     },
     setAccount(a) {
       set({ account: a, authChecked: true });

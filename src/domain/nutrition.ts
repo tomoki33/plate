@@ -156,7 +156,7 @@ export type SpreadPreset = 'small' | 'standard' | 'large';
  * 標準は設計書の初期値（高 1.15／オフ 0.85）。
  */
 export const SPREAD_PRESETS: Record<SpreadPreset, { label: string; high: number; off: number }> = {
-  small: { label: '差を小さく', high: 1.08, off: 0.92 },
+  small: { label: '差を小さく', high: 1.07, off: 0.93 },
   standard: { label: '標準', high: 1.15, off: 0.85 },
   large: { label: '差を大きく', high: 1.25, off: 0.75 },
 };

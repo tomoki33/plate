@@ -11,6 +11,7 @@ export { Badge } from './components/Badge';
 export { PrimaryButton, OutlineButton, StepButton } from './components/Button';
 export { Bar, Hairline } from './components/Bar';
 export { Sheet } from './components/Sheet';
-export { Segmented, Stepper, ListRow, Chip, Field, Notice } from './components/Controls';
+export { Segmented, Stepper, ListRow, Chip, Field, Notice, Card, CardRow, InlineStepper } from './components/Controls';
 export { NumberStepper } from './components/NumberStepper';
 export type { NumberStepperProps } from './components/NumberStepper';
+export { StepBox } from './components/StepBox';

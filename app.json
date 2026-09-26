@@ -65,6 +65,14 @@
             "backgroundColor": "#1F1712"
           }
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "食事の写真を撮って、食べたものの栄養を推定するために、カメラを使います。",
+          "photosPermission": "食事の写真を選んで、食べたものの栄養を推定するために、写真を使います。",
+          "microphonePermission": false
+        }
       ]
     ],
     "scheme": "plate",

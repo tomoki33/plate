@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Linking, Platform, Pressable, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,7 +28,8 @@ export default function Login() {
   const skipLogin = useStore((s) => s.skipLogin);
   const setAccount = useStore((s) => s.setAccount);
 
-  const [step, setStep] = useState<Step>('start');
+  const { email: startWithEmail } = useLocalSearchParams<{ email?: string }>();
+  const [step, setStep] = useState<Step>(startWithEmail ? 'email' : 'start');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +79,7 @@ export default function Login() {
     setError(null);
     const r = await verifyEmailCode(normalizeEmail(email), c);
     if (!r.ok) setCode('');
-    else if (r.mock) setAccount({ userId: 'dev-mock', email: normalizeEmail(email) });
+    else if (r.mock) setAccount({ userId: 'dev-mock', email: normalizeEmail(email), provider: 'email' });
     finish(r);
   };
 

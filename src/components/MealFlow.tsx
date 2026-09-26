@@ -1,14 +1,16 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
-import { Badge, Field, Hairline, N, Notice, NumberStepper, PrimaryButton, Segmented, Sheet, T, color, font, hairline, radius } from '@/design-system';
+import { Image, Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Badge, Field, N, Notice, PrimaryButton, Segmented, Sheet, StepBox, T, color, font, hairline, radius } from '@/design-system';
 import { getFoodsByIds, searchFoodsDb } from '../db/repo';
 import { SLOT_LABEL, shortName } from '../domain/foodSearch';
 import type { FoodItem, MealSet, Slot } from '../domain/models';
 import type { Pfc } from '../domain/types';
 import { estimateMeal, type EstimateRow } from '../services/ai';
+import { persistPhoto, pickPhoto, type PickedPhoto } from '../services/photos';
 import { accessToken } from '../services/supabase';
 import { useStore, type MealItemInput } from '../store/store';
+import { CameraIcon, PhotoIcon } from './AuthIcons';
 
 type Mode = 0 | 1 | 2;
 
@@ -27,6 +29,9 @@ interface Props {
   /** トレ後（完了済み）ならマイセットを「トレ後によく使う順」にする */
   postWorkout: boolean;
   aiLimit: number;
+  /** 添付した写真（今日タブのカメラボタンで撮ったものも、ここに入る） */
+  photo: PickedPhoto | null;
+  onPhoto: (p: PickedPhoto | null) => void;
 }
 
 const fmt = (n: number) => Math.round(n).toLocaleString();
@@ -35,7 +40,19 @@ const pfcLine = (v: Pfc) => `P${Math.round(v.P)} F${Math.round(v.F)} C${Math.rou
 const scale = (per: { kcal: number; p: number; f: number; c: number }, g: number): Pfc => ({ kcal: Math.round((per.kcal * g) / 100), P: r1((per.p * g) / 100), F: r1((per.f * g) / 100), C: r1((per.c * g) / 100) });
 const foodInput = (f: FoodItem, g: number): MealItemInput => ({ foodId: f.id, name: shortName(f.name), grams: g, ...scale(f, g) });
 
-export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date, dateLabel, slot: slotProp, postWorkout, aiLimit }: Props) {
+/** 写真のサムネイル（サンプルは縞の代わりの色面） */
+export function PhotoThumb({ photo, size, radiusPx = 4 }: { photo: PickedPhoto | { uri: string; sample?: boolean }; size: number; radiusPx?: number }) {
+  if ('sample' in photo && photo.sample) {
+    return (
+      <View style={{ width: size, height: size, borderRadius: radiusPx, backgroundColor: color.off, alignItems: 'center', justifyContent: 'center' }}>
+        {size >= 56 ? <T size={size >= 72 ? 10 : 9} c={color.badgeFg}>サンプル</T> : null}
+      </View>
+    );
+  }
+  return <Image source={{ uri: photo.uri }} style={{ width: size, height: size, borderRadius: radiusPx, backgroundColor: color.off }} />;
+}
+
+export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date, dateLabel, slot: slotProp, postWorkout, aiLimit, photo, onPhoto }: Props) {
   const router = useRouter();
   const addMealItems = useStore((s) => s.addMealItems);
   const addFromMealSet = useStore((s) => s.addFromMealSet);
@@ -47,6 +64,7 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
 
   const [mode, setMode] = useState<Mode>(initialMode);
   const [slot, setSlot] = useState<Slot>(slotProp);
+  const [slotOpen, setSlotOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<FoodItem[]>([]);
   const [gram, setGram] = useState<{ food: FoodItem; g: number } | null>(null);
@@ -55,16 +73,20 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
   const [aiText, setAiText] = useState('');
   const [aiRows, setAiRows] = useState<EstimateRow[] | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [quote, setQuote] = useState('');
   const aiLeft = Math.max(0, aiLimit - aiUsed);
   const reqId = useRef(0);
 
   useEffect(() => {
     if (open) {
       setSlot(slotProp);
+      setSlotOpen(false);
       setMode(initialMode);
       setGram(null);
       setManual(false);
       setQuery('');
+      setAiError(null);
     }
   }, [open, initialMode, slotProp]);
 
@@ -87,11 +109,13 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
     getFoodsByIds(ids).then((fs) => setSetFoods(Object.fromEntries(fs.map((f) => [f.id, f]))));
   }, [open, mealSets]);
 
-  const finish = (name: string, items: MealItemInput[], ai?: boolean) => {
-    addMealItems(name, items, { ai, date, slot });
+  const finish = (name: string, items: MealItemInput[], opts: { ai?: boolean; inputType?: 'search' | 'text' | 'photo'; photoUri?: string | null } = {}) => {
+    addMealItems(name, items, { date, slot, ...opts });
     setGram(null);
     setAiRows(null);
     setManual(false);
+    onPhoto(null);
+    setAiText('');
     onClose();
   };
 
@@ -113,141 +137,219 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
     );
 
   const gramV = gram ? scale(gram.food, gram.g) : null;
-  const setG = (g: number) => setGram((x) => (x ? { ...x, g: Math.max(1, g) } : x));
+  const setG = (g: number) => setGram((x) => (x ? { ...x, g: Math.max(10, g) } : x));
 
   const known = (aiRows ?? []).filter((r) => r.per100);
   const aiItems: MealItemInput[] = known.map((r) => ({ foodId: r.foodId ?? null, name: shortName(r.name!), grams: r.grams!, ...scale(r.per100!, r.grams!) }));
   const aiV = aiItems.reduce<Pfc>((a, i) => ({ kcal: a.kcal + i.kcal, P: a.P + i.P, F: a.F + i.F, C: a.C + i.C }), { kcal: 0, P: 0, F: 0, C: 0 });
 
+  const take = async (source: 'camera' | 'library') => {
+    const r = await pickPhoto(source);
+    if (r.error) setAiError(r.error);
+    else if (r.photo) {
+      setAiError(null);
+      onPhoto(r.photo);
+    }
+  };
+
   const runAi = async () => {
+    if (!photo && !aiText.trim()) return;
     setAiBusy(true);
+    setAiError(null);
     try {
       consumeAi(todayKey);
-      setAiRows(await estimateMeal(aiText, accessToken));
+      const res = await estimateMeal({ text: aiText, photo }, accessToken);
+      if (res.error) setAiError(res.error);
+      else {
+        setQuote(aiText.trim() ? `「${aiText.trim()}」` : '写真のみ');
+        setAiRows(res.rows);
+      }
     } finally {
       setAiBusy(false);
     }
   };
 
+  const addAi = async () => {
+    const savedUri = photo ? await persistPhoto(photo) : null;
+    const name = photo || !aiText.trim() ? known.map((r) => shortName(r.name!).split(' ')[0]).join('・').slice(0, 18) : aiText.trim().slice(0, 18).trim();
+    finish(name, aiItems, { ai: true, inputType: photo ? 'photo' : 'text', photoUri: savedUri });
+  };
+
+  const modeLabels = ['マイセット', '検索', 'AI（写真・文章）'];
+
   return (
     <>
       <Sheet visible={open && !aiRows} onClose={onClose}>
-        <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
-          <T size={17} w={900}>{dateLabel ? `${dateLabel} ` : ''}{SLOT_LABEL[slot]}に追加</T>
-          <T size={12} c={color.sub} style={{ marginTop: 2 }}>あと P{Math.round(remaining.P)} F{Math.round(remaining.F)} C{Math.round(remaining.C)}（目安）</T>
-          <View style={{ marginTop: 10 }}>
-            <Segmented value={slot} onChange={setSlot} options={(['朝', '昼', '間食', '夜'] as Slot[]).map((v) => ({ value: v, label: v }))} />
+        <View style={{ paddingHorizontal: 18, paddingTop: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <Pressable accessibilityRole="button" accessibilityLabel="時間帯を変える" onPress={() => setSlotOpen(!slotOpen)} style={{ flexShrink: 1 }}>
+            <T size={17} w={900} numberOfLines={1}>{dateLabel ? `${dateLabel} ` : ''}{SLOT_LABEL[slot]}に追加 <T size={12} c={color.sub}>{slotOpen ? '˄' : '˅'}</T></T>
+          </Pressable>
+          <T size={12} c={color.sub} style={{ marginLeft: 8 }}>あと P{Math.round(remaining.P)} F{Math.round(remaining.F)} C{Math.round(remaining.C)}</T>
+        </View>
+        {slotOpen && (
+          <View style={{ marginHorizontal: 18, marginTop: 8 }}>
+            <Segmented value={slot} onChange={(s: Slot) => { setSlot(s); setSlotOpen(false); }} options={(['朝', '昼', '間食', '夜'] as Slot[]).map((v) => ({ value: v, label: v }))} />
           </View>
-          <View style={{ marginTop: 12 }}>
-            <Segmented
-              value={mode}
-              onChange={(m) => {
-                setMode(m);
-                setGram(null);
-                setManual(false);
-              }}
-              options={[{ value: 0 as Mode, label: 'マイセット' }, { value: 1 as Mode, label: '検索' }, { value: 2 as Mode, label: '文章で入力' }]}
-            />
-          </View>
+        )}
+        <View style={{ marginHorizontal: 18, marginTop: 14 }}>
+          <Segmented
+            value={mode}
+            onChange={(m) => {
+              setMode(m);
+              setGram(null);
+              setManual(false);
+            }}
+            options={modeLabels.map((label, i) => ({ value: i as Mode, label }))}
+          />
         </View>
 
-        <ScrollView keyboardShouldPersistTaps="handled" style={{ marginTop: 8 }} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 8 }}>
           {mode === 0 && (
-            <>
-              <T size={11} c={color.sub} style={{ marginVertical: 8 }}>{postWorkout ? 'トレ後によく使う順' : '最近使った順'}</T>
-              {sets.length === 0 && <T size={13} c={color.sub} style={{ paddingVertical: 12 }}>マイセットはまだありません。検索や文章入力のあと、登録できます。</T>}
-              {sets.map((m) => (
-                <Pressable key={m.id} accessibilityRole="button" onPress={() => { addFromMealSet(m, Object.values(setFoods), { date, slot }); onClose(); }} style={{ minHeight: 56, justifyContent: 'center', borderTopWidth: hairline, borderTopColor: color.line, paddingVertical: 8 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <T size={14} w={500}>{m.name}</T>
-                    {m.slotHint === hint && <Badge>{m.slotHint}</Badge>}
-                  </View>
-                  <N size={12} w={500} c={color.sub} style={{ marginTop: 2 }}>{pfcLine(setPfc(m))}</N>
-                </Pressable>
-              ))}
-            </>
+            <View>
+              <T size={11} c={color.sub} style={{ paddingHorizontal: 18, paddingTop: 14 }}>{postWorkout ? 'トレ後によく使う順' : '最近使った順'}</T>
+              <View style={{ paddingHorizontal: 18, paddingTop: 4 }}>
+                {sets.length === 0 && <T size={13} c={color.sub} style={{ paddingVertical: 12 }}>マイセットはまだありません。文章入力の確認画面から登録できます。</T>}
+                {sets.map((m) => (
+                  <Pressable key={m.id} accessibilityRole="button" onPress={() => { addFromMealSet(m, Object.values(setFoods), { date, slot }); onClose(); }} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 58, borderBottomWidth: hairline, borderBottomColor: color.line }}>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <T size={14} w={500}>{m.name}</T>
+                        {m.slotHint === hint && <Badge>{m.slotHint}</Badge>}
+                      </View>
+                      <N size={11} w={500} c={color.sub} style={{ marginTop: 2 }}>{pfcLine(setPfc(m))}</N>
+                    </View>
+                    <View style={{ width: 44, height: 44, borderWidth: hairline, borderColor: color.lineStrong, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center', backgroundColor: color.surface }}>
+                      <T size={18}>＋</T>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
           )}
 
           {mode === 1 && !gram && !manual && (
-            <>
-              <Field value={query} onChangeText={setQuery} placeholder="食品名で検索（日本食品標準成分表 八訂）" style={{ marginTop: 8 }} />
-              {!query.trim() && <T size={11} c={color.sub} style={{ marginTop: 10 }}>マイ食品とよく使う食品</T>}
-              {results.length === 0 && query.trim() !== '' && <T size={13} c={color.sub} style={{ marginTop: 16 }}>見つかりませんでした。</T>}
-              {results.map((f) => (
-                <Pressable key={f.id} accessibilityRole="button" onPress={() => setGram({ food: f, g: f.defaultG ?? 100 })} style={{ minHeight: 56, justifyContent: 'center', borderTopWidth: hairline, borderTopColor: color.line, paddingVertical: 8 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                    <T size={14} w={500} style={{ flex: 1 }}>{shortName(f.name)}</T>
+            <View>
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder="食品名で検索（例：さば、卵）"
+                placeholderTextColor={color.faint}
+                style={{ marginHorizontal: 18, marginTop: 14, height: 46, borderWidth: hairline, borderColor: color.lineStrong, borderRadius: radius.input, backgroundColor: color.surface, paddingHorizontal: 12, fontFamily: font.jp, fontSize: 15, color: color.text }}
+              />
+              <View style={{ paddingHorizontal: 18, paddingTop: 4 }}>
+                {!query.trim() && <T size={11} c={color.sub} style={{ paddingVertical: 6 }}>マイ食品とよく使う食品</T>}
+                {results.length === 0 && query.trim() !== '' && <T size={13} c={color.sub} style={{ paddingVertical: 12 }}>見つかりませんでした。</T>}
+                {results.map((f) => (
+                  <Pressable key={f.id} accessibilityRole="button" onPress={() => setGram({ food: f, g: f.defaultG ?? 100 })} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 54, borderBottomWidth: hairline, borderBottomColor: color.line, gap: 8 }}>
+                    <View style={{ flex: 1 }}>
+                      <T size={14}>{shortName(f.name)}</T>
+                      <N size={11} w={500} c={color.sub}>100gあたり P{f.p} F{f.f} C{f.c}・{f.kcal}kcal</N>
+                    </View>
                     <T size={11} c={color.sub}>{f.source === '自作' ? 'マイ食品' : '成分表'}</T>
-                  </View>
-                  <N size={12} w={500} c={color.sub} style={{ marginTop: 2 }}>100gあたり P{f.p} F{f.f} C{f.c}・{f.kcal}kcal</N>
+                  </Pressable>
+                ))}
+                <Pressable accessibilityRole="button" onPress={() => setManual(true)} style={{ minHeight: 48, justifyContent: 'center' }}>
+                  <T size={13} w={700}>見つからない？ 成分表示から手入力</T>
                 </Pressable>
-              ))}
-              <Pressable accessibilityRole="button" onPress={() => setManual(true)} style={{ minHeight: 48, justifyContent: 'center', borderTopWidth: hairline, borderTopColor: color.line }}>
-                <T size={13} w={700}>見つからない？ 成分表示から手入力</T>
-              </Pressable>
-              <T size={10.5} c={color.sub} style={{ marginTop: 6 }}>出典：文部科学省「日本食品標準成分表（八訂）」</T>
-            </>
+                <T size={11} c={color.sub} style={{ paddingTop: 2 }}>出典：日本食品標準成分表（八訂）</T>
+              </View>
+            </View>
           )}
 
           {mode === 1 && gram && gramV && (
-            <View style={{ paddingTop: 8 }}>
-              <Pressable accessibilityRole="button" onPress={() => setGram(null)} style={{ minHeight: 44, justifyContent: 'center' }}>
-                <T size={13} c={color.sub}>‹ 検索に戻る</T>
-              </Pressable>
-              <T size={16} w={700}>{shortName(gram.food.name)}</T>
-              <View style={{ alignItems: 'center', marginTop: 14 }}>
-                <NumberStepper value={gram.g} onChange={setG} step={10} min={1} max={5000} unit="g" size={44} width={120} buttonSize={52} accessibilityLabel="グラム" />
+            <View>
+              <View style={{ paddingHorizontal: 18, paddingTop: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <T size={16} w={700} style={{ flex: 1 }}>{shortName(gram.food.name)}</T>
+                <Pressable accessibilityRole="button" onPress={() => setGram(null)} style={{ minHeight: 44, justifyContent: 'center', paddingLeft: 12 }}>
+                  <T size={12} c={color.sub}>戻る</T>
+                </Pressable>
               </View>
-              <View style={{ flexDirection: 'row', gap: 8, justifyContent: 'center', marginTop: 12, flexWrap: 'wrap' }}>
+              <View style={{ marginHorizontal: 18, marginTop: 4 }}>
+                <StepBox value={String(gram.g)} unit="g" onDown={() => setG(gram.g - 10)} onUp={() => setG(gram.g + 10)} height={64} buttonWidth={56} size={34} label="グラム" />
+              </View>
+              <View style={{ paddingHorizontal: 18, paddingTop: 10, flexDirection: 'row', gap: 8 }}>
                 {[50, 100, 150, 200].map((g) => (
-                  <Pressable key={g} accessibilityRole="button" onPress={() => setG(g)} style={{ minWidth: 60, height: 44, borderRadius: radius.button, borderWidth: 1, borderColor: color.lineStrong, alignItems: 'center', justifyContent: 'center', backgroundColor: color.surface }}>
-                    <N size={15} w={500}>{g}g</N>
+                  <Pressable key={g} accessibilityRole="button" onPress={() => setG(g)} style={{ flex: 1, height: 40, borderWidth: hairline, borderColor: color.lineStrong, borderRadius: radius.input, alignItems: 'center', justifyContent: 'center', backgroundColor: color.surface }}>
+                    <N size={15} w={600}>{g}g</N>
                   </Pressable>
                 ))}
-                {gram.food.unitG ? (
-                  <Pressable accessibilityRole="button" onPress={() => setG(gram.g + gram.food.unitG!)} style={{ minWidth: 60, height: 44, paddingHorizontal: 10, borderRadius: radius.button, borderWidth: 1, borderColor: color.lineStrong, alignItems: 'center', justifyContent: 'center', backgroundColor: color.surface }}>
-                    <T size={13}>＋1個（{gram.food.unitG}g）</T>
-                  </Pressable>
-                ) : null}
               </View>
-              <N size={13} w={500} c={color.sub} style={{ marginTop: 14, textAlign: 'center' }}>{pfcLine(gramV)}</N>
-              <T size={12} c={color.sub} style={{ textAlign: 'center', marginTop: 2 }}>追加後の残り P{Math.round(remaining.P - gramV.P)}g・C{Math.round(remaining.C - gramV.C)}g（目安）</T>
-              <PrimaryButton label="追加" style={{ marginTop: 16 }} onPress={() => finish(`${shortName(gram.food.name)} ${gram.g}g`, [foodInput(gram.food, gram.g)])} />
+              <N size={13} w={500} c={color.badgeFg} style={{ paddingHorizontal: 18, paddingTop: 12 }}>
+                {pfcLine(gramV)}　→ 追加後の残り P{Math.round(remaining.P - gramV.P)}g・C{Math.round(remaining.C - gramV.C)}g
+              </N>
+              <View style={{ paddingHorizontal: 18, paddingTop: 16 }}>
+                <PrimaryButton label="追加" onPress={() => finish(`${shortName(gram.food.name)} ${gram.g}g`, [foodInput(gram.food, gram.g)])} />
+              </View>
             </View>
           )}
 
           {mode === 1 && manual && (
-            <ManualEntry
-              onBack={() => setManual(false)}
-              onAdd={(f, g, save) => {
-                const id = save ? saveMyFood({ name: f.name, kcal: f.kcal, p: f.p, f: f.f, c: f.c, defaultG: g }) : null;
-                finish(`${f.name} ${g}g`, [{ foodId: id, name: f.name, grams: g, ...scale(f, g) }]);
-              }}
-            />
+            <View style={{ paddingHorizontal: 18 }}>
+              <ManualEntry
+                onBack={() => setManual(false)}
+                onAdd={(f, g, save) => {
+                  const id = save ? saveMyFood({ name: f.name, kcal: f.kcal, p: f.p, f: f.f, c: f.c, defaultG: g }) : null;
+                  finish(`${f.name} ${g}g`, [{ foodId: id, name: f.name, grams: g, ...scale(f, g) }]);
+                }}
+              />
+            </View>
           )}
 
           {mode === 2 && (
-            <View style={{ paddingTop: 8 }}>
+            <View>
+              {!photo ? (
+                <View>
+                  <View style={{ marginHorizontal: 18, marginTop: 14, flexDirection: 'row', gap: 8 }}>
+                    <Pressable accessibilityRole="button" onPress={() => take('camera')} style={{ flex: 1, height: 52, borderWidth: hairline, borderColor: color.lineStrong, borderRadius: radius.button, backgroundColor: color.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                      <CameraIcon size={20} />
+                      <T size={14} w={500}>撮影</T>
+                    </Pressable>
+                    <Pressable accessibilityRole="button" onPress={() => take('library')} style={{ flex: 1, height: 52, borderWidth: hairline, borderColor: color.lineStrong, borderRadius: radius.button, backgroundColor: color.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                      <PhotoIcon size={20} />
+                      <T size={14} w={500}>写真を選ぶ</T>
+                    </Pressable>
+                  </View>
+                  {__DEV__ && (
+                    <Pressable accessibilityRole="button" onPress={() => onPhoto({ uri: '', sample: true })} style={{ marginHorizontal: 18, height: 36, justifyContent: 'center', alignSelf: 'flex-start' }}>
+                      <T size={12} c={color.badgeFg} style={{ textDecorationLine: 'underline' }}>サンプル写真で試す</T>
+                    </Pressable>
+                  )}
+                </View>
+              ) : (
+                <View style={{ marginHorizontal: 18, marginTop: 14, flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                  <PhotoThumb photo={photo} size={72} radiusPx={6} />
+                  <View style={{ flex: 1, gap: 3 }}>
+                    <T size={14} w={700}>写真を添付しました</T>
+                    <T size={12} c={color.sub}>ひとこと添えると精度が上がります</T>
+                  </View>
+                  <Pressable accessibilityRole="button" accessibilityLabel="写真を外す" onPress={() => onPhoto(null)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+                    <T size={16} c={color.sub}>×</T>
+                  </Pressable>
+                </View>
+              )}
               <TextInput
                 value={aiText}
-                onChangeText={setAiText}
-                placeholder="例：鶏むね200g 米150g 味噌汁"
+                onChangeText={(v) => { setAiText(v); setAiError(null); }}
+                placeholder={photo ? 'ひとこと（任意）例：米は半分残した' : '例：鶏むね200g 米150g 味噌汁'}
                 placeholderTextColor={color.faint}
                 multiline
-                style={{ minHeight: 96, textAlignVertical: 'top', borderWidth: 1, borderColor: color.lineStrong, borderRadius: radius.input, padding: 12, fontFamily: font.jp, fontSize: 14, color: color.text, backgroundColor: color.surface }}
+                style={{ marginHorizontal: 18, marginTop: 12, height: 80, textAlignVertical: 'top', borderWidth: hairline, borderColor: color.lineStrong, borderRadius: radius.input, backgroundColor: color.surface, padding: 12, fontFamily: font.jp, fontSize: 15, lineHeight: 24, color: color.text }}
               />
-              <T size={12} c={color.sub} style={{ marginTop: 8 }}>今日あと{aiLeft}回（1日{aiLimit}回まで）。推定のあと、確認画面で直せます。</T>
+              <T size={12} c={color.sub} style={{ paddingHorizontal: 18, paddingTop: 10, lineHeight: 19 }}>
+                {photo ? '写真とひとことから' : '写真を撮るか、食べたものを書くと'}PFCを推定します。追加する前に必ず確認画面が出ます。今日はあと{aiLeft}回（写真と文章の合計）。
+              </T>
+              {aiError && <T size={12} c={color.brandText} style={{ paddingHorizontal: 18, paddingTop: 8 }}>{aiError}</T>}
               {aiLeft === 0 && (
-                <View style={{ marginTop: 8 }}>
-                  <Notice>
-                    今日の回数を使い切りました。有料プランなら1日30回まで使えます。
-                  </Notice>
+                <View style={{ paddingHorizontal: 18, paddingTop: 8 }}>
+                  <Notice>今日の回数を使い切りました。有料プランなら1日30回まで使えます。</Notice>
                   <Pressable accessibilityRole="button" onPress={() => { onClose(); router.push('/paywall'); }} style={{ minHeight: 44, justifyContent: 'center' }}>
                     <T size={13} w={700}>プランを見る ›</T>
                   </Pressable>
                 </View>
               )}
-              <PrimaryButton label={aiBusy ? '推定中…' : '推定する'} disabled={!aiText.trim() || aiLeft === 0 || aiBusy} style={{ marginTop: 12 }} onPress={runAi} />
+              <View style={{ paddingHorizontal: 18, paddingTop: 16 }}>
+                <PrimaryButton label={aiBusy ? '推定中…' : '推定する'} disabled={(!photo && !aiText.trim()) || aiLeft === 0 || aiBusy} onPress={runAi} />
+              </View>
             </View>
           )}
         </ScrollView>
@@ -256,63 +358,70 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
       {/* AI推定の確認（全画面）。必ずこの画面を挟む */}
       <Modal visible={open && !!aiRows} animationType="slide" onRequestClose={() => setAiRows(null)}>
         <View style={{ flex: 1, backgroundColor: color.bg, paddingTop: 54 }}>
-          <View style={{ paddingHorizontal: 22, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <T size={22} w={900}>推定の確認</T>
-            <Pressable accessibilityRole="button" onPress={() => setAiRows(null)} hitSlop={10} style={{ minHeight: 44, justifyContent: 'center' }}>
-              <T size={13} c={color.sub}>戻る</T>
+          <View style={{ paddingHorizontal: 20, height: 44, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Pressable accessibilityRole="button" onPress={() => setAiRows(null)} style={{ minHeight: 44, justifyContent: 'center' }}>
+              <T size={14} c={color.sub}>戻る</T>
             </Pressable>
+            <T size={15} w={700}>推定を確認</T>
+            <View style={{ width: 28 }} />
           </View>
-          <T size={12} c={color.sub} style={{ paddingHorizontal: 22, marginTop: 2 }}>数字はすべて目安です。gを直せます。</T>
-          <ScrollView style={{ marginTop: 10 }} contentContainerStyle={{ paddingHorizontal: 22 }}>
+          {/* 入力した内容（写真があれば56pxのサムネイル＋ひとこと） */}
+          <View style={{ marginHorizontal: 20, marginTop: 10, padding: 10, paddingHorizontal: 12, backgroundColor: color.badgeBg, borderRadius: radius.input, flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+            {photo && <PhotoThumb photo={photo} size={56} />}
+            <T size={13} c={color.badgeFg} style={{ flex: 1, lineHeight: 20 }}>{quote}</T>
+          </View>
+          {photo && <T size={12} w={700} c={color.brandText} style={{ paddingHorizontal: 20, paddingTop: 8 }}>写真からの量は目安です。違っていたらgを直してください。</T>}
+          <ScrollView style={{ flex: 1, marginTop: 8 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
             {(aiRows ?? []).map((r, i) => {
               if (!r.per100) {
                 return (
-                  <View key={i} style={{ paddingVertical: 12, borderTopWidth: hairline, borderTopColor: color.line }}>
-                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                  <View key={i} style={{ paddingVertical: 12, borderBottomWidth: hairline, borderBottomColor: color.line, gap: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <T size={14} w={500}>{r.token}</T>
-                      <Badge>見つからず</Badge>
+                      <Tag>見つからず</Tag>
                     </View>
-                    <T size={12} c={color.sub} style={{ marginTop: 4 }}>成分表にないため除外します。検索や手入力から追加できます。</T>
+                    <T size={11.5} c={color.sub}>成分表にないため除外します。検索から追加できます。</T>
                   </View>
                 );
               }
               const x = scale(r.per100, r.grams!);
-              const setGrams = (g: number) => setAiRows((rows) => rows!.map((z, j) => (j === i ? { ...z, grams: Math.max(1, g) } : z)));
+              const setGrams = (g: number) => setAiRows((rows) => rows!.map((z, j) => (j === i ? { ...z, grams: Math.max(10, g) } : z)));
               return (
-                <View key={i} style={{ paddingVertical: 10, borderTopWidth: hairline, borderTopColor: color.line, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <View key={i} style={{ paddingVertical: 12, borderBottomWidth: hairline, borderBottomColor: color.line, gap: 6 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                    <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
                       <T size={14} w={500}>{shortName(r.name!)}</T>
-                      {r.origin === 'ai' ? <Badge high>AI推定</Badge> : <Badge>成分表と照合</Badge>}
+                      <Tag>{r.origin === 'photo' ? '写真から推定' : r.origin === 'ai' ? 'AI推定' : '成分表と照合'}</Tag>
                     </View>
-                    <N size={12} w={500} c={color.sub} style={{ marginTop: 2 }}>{pfcLine(x)}</N>
+                    <View style={{ width: 132 }}>
+                      <StepBox value={String(r.grams)} onDown={() => setGrams(r.grams! - 10)} onUp={() => setGrams(r.grams! + 10)} height={40} buttonWidth={40} size={17} radiusPx={radius.input} label={`${r.token}の`} />
+                    </View>
                   </View>
-                  <NumberStepper value={r.grams!} onChange={setGrams} step={10} min={1} max={5000} size={16} width={52} unit="g" accessibilityLabel={`${r.token}のグラム`} />
+                  <N size={11.5} w={500} c={color.sub}>{pfcLine(x)}</N>
                 </View>
               );
             })}
           </ScrollView>
-          <Hairline />
-          <View style={{ paddingHorizontal: 22, paddingTop: 12 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 14 }}>
-              <N size={32} w={600}>{fmt(aiV.kcal)}<T size={12} c={color.sub}> kcal</T></N>
-              <N size={15} w={600} c={color.P}>P{Math.round(aiV.P)}</N>
-              <N size={15} w={600} c={color.F}>F{Math.round(aiV.F)}</N>
-              <N size={15} w={600} c={color.C}>C{Math.round(aiV.C)}</N>
+          {/* 合計：kcal と P/F/C */}
+          <View style={{ marginHorizontal: 20, marginTop: 12, flexDirection: 'row', borderWidth: hairline, borderColor: color.line, borderRadius: radius.card, backgroundColor: color.surface, overflow: 'hidden' }}>
+            <View style={{ flex: 1.2, padding: 12, paddingVertical: 10, borderRightWidth: hairline, borderRightColor: color.line }}>
+              <T size={10.5} c={color.sub}>合計 kcal</T>
+              <N size={24} w={600}>{fmt(aiV.kcal)}</N>
             </View>
-            <T size={12} c={color.sub} style={{ marginTop: 4 }}>追加後の残り　P{Math.round(remaining.P - aiV.P)}g・F{Math.round(remaining.F - aiV.F)}g・C{Math.round(remaining.C - aiV.C)}g（目安）</T>
+            {([['P', aiV.P, color.P], ['F', aiV.F, color.F], ['C', aiV.C, color.C]] as const).map(([k, v, c]) => (
+              <View key={k} style={{ flex: 1, padding: 10, borderTopWidth: 3, borderTopColor: c }}>
+                <T size={10.5} c={color.sub}>{k}</T>
+                <N size={20} w={600}>{Math.round(v)}</N>
+              </View>
+            ))}
           </View>
-          <View style={{ padding: 16, paddingBottom: 34, gap: 8 }}>
-            <PrimaryButton label="この内容で追加" disabled={known.length === 0} onPress={() => finish(aiText.trim().slice(0, 18).trim(), aiItems, true)} />
-            {known.some((r) => r.foodId) && (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  const items = known.filter((r) => r.foodId).map((r) => ({ foodId: r.foodId!, g: r.grams! }));
-                  saveMealSet(aiText.trim().slice(0, 18).trim(), items, slot);
-                }}
-                style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
-              >
+          <T size={12} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 10 }}>
+            追加後の残り　P{Math.round(remaining.P - aiV.P)}g・F{Math.round(remaining.F - aiV.F)}g・C{Math.round(remaining.C - aiV.C)}g
+          </T>
+          <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 34, gap: 4 }}>
+            <PrimaryButton label="この内容で追加" disabled={known.length === 0} onPress={addAi} />
+            {known.some((r) => r.foodId) && !photo && (
+              <Pressable accessibilityRole="button" onPress={() => saveMealSet(aiText.trim().slice(0, 18).trim() || known[0].name!, known.filter((r) => r.foodId).map((r) => ({ foodId: r.foodId!, g: r.grams! })), slot)} style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
                 <T size={13} w={700}>この組み合わせをマイセットに登録</T>
               </Pressable>
             )}
@@ -320,6 +429,15 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
         </View>
       </Modal>
     </>
+  );
+}
+
+/** 行のタグ（「AI推定」「写真から推定」「見つからず」）：枠だけの小さな印 */
+function Tag({ children }: { children: React.ReactNode }) {
+  return (
+    <View style={{ borderWidth: hairline, borderColor: color.lineStrong, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+      <T size={10} w={700} c={color.sub}>{children}</T>
+    </View>
   );
 }
 

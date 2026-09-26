@@ -3,10 +3,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Badge, Bar, N, OutlineButton, PrimaryButton, T, color, hairline, radius } from '@/design-system';
+import { CameraIcon } from '../../components/AuthIcons';
 import { EditMealSheet } from '../../components/EditMealSheet';
-import { MealFlow } from '../../components/MealFlow';
+import { MealFlow, PhotoThumb } from '../../components/MealFlow';
 import { WeightSheet } from '../../components/WeightSheet';
 import { useNow } from '../../components/useNow';
+import { pickPhoto, type PickedPhoto } from '../../services/photos';
 import { addDays, dateKey, formatJpDate, slotOf } from '../../domain/dates';
 import { DAY_LABELS, DAY_TYPE_JP, type DayType, type Macro } from '../../domain/types';
 import { groupMeals, sumMeals, templateName, weightAverage7, useWeek, type MealGroup } from '../../store/selectors';
@@ -31,13 +33,15 @@ export default function TodayScreen() {
   const sessions = useStore((s) => s.sessions);
   const weights = useStore((s) => s.weights);
   const removeMealGroup = useStore((s) => s.removeMealGroup);
-  const setWeight = useStore((s) => s.setWeight);
   const maybeUpdateTdee = useStore((s) => s.maybeUpdateTdee);
   const recordTarget = useStore((s) => s.recordTarget);
   // 見ている日。null は今日。week は「何週前か」（0＝今週）、day は月曜=0
   const [sel, setSel] = useState<{ week: number; day: number } | null>(null);
   const [editing, setEditing] = useState<MealGroup | null>(null);
-  const [sheet, setSheet] = useState<null | 'meal' | 'weight'>(null);
+  const [photo, setPhoto] = useState<PickedPhoto | null>(null);
+  const [weightDate, setWeightDate] = useState<string | null>(null);
+  const showToast = useStore((s) => s.showToast);
+  const [sheet, setSheet] = useState<null | 'meal'>(null);
   const [mode, setMode] = useState<0 | 1 | 2>(0);
   const { meal } = useLocalSearchParams<{ meal?: string }>();
 
@@ -129,7 +133,6 @@ export default function TodayScreen() {
     setMode(m);
     setSheet('meal');
   };
-  const weightLabel = isToday ? '体重を記録' : `${dayLabel}の体重`;
 
   return (
     <View style={{ flex: 1, backgroundColor: color.bg }}>
@@ -217,20 +220,23 @@ export default function TodayScreen() {
 
         {canRecord && (
           <>
-            {/* 体重（過去の日も入力・変更できる） */}
-            <Pressable accessibilityRole="button" onPress={() => setSheet('weight')} style={{ marginHorizontal: 22, minHeight: 48, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: hairline, borderBottomColor: color.line }}>
-              <T size={13} c={color.badgeFg}>
-                {viewWeight !== undefined ? (
-                  <>
-                    <N size={15} w={600}>{viewWeight.toFixed(1)}</N> kg{avg7 ? `・7日平均 ${avg7.toFixed(1)}` : ''}
-                  </>
-                ) : isToday ? (
-                  '今朝はまだ'
-                ) : (
-                  '体重の記録なし'
-                )}
-              </T>
-              <T size={13} w={700} c={viewWeight !== undefined ? color.sub : color.text}>{viewWeight !== undefined ? '変更' : '入力'}</T>
+            {/* 体重（高さ52）。未入力は「今朝の体重」を太字に、前回の値と黒い「入力」ボタン。入力済みは枠だけの「変更」 */}
+            <Pressable accessibilityRole="button" onPress={() => setWeightDate(viewKey)} style={{ marginHorizontal: 22, minHeight: 52, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, borderBottomWidth: hairline, borderBottomColor: color.line }}>
+              <T size={13} w={viewWeight !== undefined ? 400 : 700} c={viewWeight !== undefined ? color.sub : color.text}>{viewWeight !== undefined ? '体重' : isToday ? '今朝の体重' : `${dayLabel}の体重`}</T>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <T size={13} c={color.badgeFg}>
+                  {viewWeight !== undefined ? (
+                    <>
+                      <N size={15} w={600}>{viewWeight.toFixed(1)}</N> kg{avg7 ? `・7日平均 ${avg7.toFixed(1)}` : ''}
+                    </>
+                  ) : (
+                    `前回 ${w.latestWeight.toFixed(1)}`
+                  )}
+                </T>
+                <View style={{ height: 32, paddingHorizontal: 12, borderRadius: radius.input, alignItems: 'center', justifyContent: 'center', backgroundColor: viewWeight !== undefined ? 'transparent' : color.text, borderWidth: hairline, borderColor: viewWeight !== undefined ? color.lineStrong : color.text }}>
+                  <T size={12} w={700} c={viewWeight !== undefined ? color.badgeFg : color.onText}>{viewWeight !== undefined ? '変更' : '入力'}</T>
+                </View>
+              </View>
             </Pressable>
 
             {/* その日のトレ（記録があれば） */}
@@ -249,8 +255,9 @@ export default function TodayScreen() {
                 <View key={g.groupId} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', borderBottomWidth: hairline, borderBottomColor: color.line }}>
                   <Pressable accessibilityRole="button" accessibilityLabel={`${g.name}を編集`} onPress={() => setEditing(g)} style={{ flex: 1, minHeight: 48, flexDirection: 'row', alignItems: 'center' }}>
                     <T size={12} c={color.sub} style={{ width: 36 }}>{g.slot}</T>
-                    <T size={14} style={{ flex: 1 }} numberOfLines={1}>{g.name}</T>
-                    {g.ai && <Badge high>AI</Badge>}
+                    {g.photoUri ? <View style={{ marginRight: 8 }}><PhotoThumb photo={{ uri: g.photoUri }} size={28} /></View> : null}
+                    <T size={13.5} style={{ flex: 1 }} numberOfLines={1}>{g.name}</T>
+                    {g.ai && !g.photoUri && <Badge high>AI</Badge>}
                     <N size={15} w={500} style={{ marginLeft: 8, minWidth: 40, textAlign: 'right' }}>{fmt(g.kcal)}</N>
                   </Pressable>
                   <Pressable accessibilityRole="button" accessibilityLabel={`${g.name}を削除`} onPress={() => removeMealGroup(g.groupId)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
@@ -263,8 +270,24 @@ export default function TodayScreen() {
         )}
       </ScrollView>
 
-      {/* 固定のボタン。今日は「食事を記録」、過去の日は「今日に戻る」と「食事を記録」 */}
-      <View style={{ position: 'absolute', left: 16, right: 16, bottom: 12, flexDirection: 'row', gap: 8 }}>
+      {/* 固定のボタン。今日は［カメラ］［食事を記録］。他の日を見ているときはカメラを隠し、「今日に戻る」を出す */}
+      <View style={{ position: 'absolute', left: 22, right: 22, bottom: 12, flexDirection: 'row', gap: 8 }}>
+        {isToday && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="写真で記録"
+            onPress={async () => {
+              const r = await pickPhoto('camera');
+              if (r.error) return showToast(r.error);
+              if (!r.photo) return;
+              setPhoto(r.photo);
+              openMeal(2);
+            }}
+            style={{ width: 52, height: 52, borderWidth: hairline, borderColor: color.lineStrong, borderRadius: radius.button, backgroundColor: color.surface, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <CameraIcon size={24} />
+          </Pressable>
+        )}
         {!isToday && <OutlineButton label="今日に戻る" onPress={() => setSel(null)} style={{ flex: 1 }} />}
         {canRecord && <PrimaryButton label={isToday ? '食事を記録' : `${dayLabel}に記録`} onPress={() => openMeal(0)} style={{ flex: isToday ? 1 : 1.5 }} />}
       </View>
@@ -280,8 +303,10 @@ export default function TodayScreen() {
         slot={isToday ? slotOf(now) : '昼'}
         postWorkout={isToday && !!w.todayWorkout}
         aiLimit={w.features.aiLimit}
+        photo={photo}
+        onPhoto={setPhoto}
       />
-      <WeightSheet title={weightLabel} open={sheet === 'weight'} onClose={() => setSheet(null)} initial={viewWeight ?? w.weight} onSave={(kg) => setWeight(viewKey, kg)} />
+      <WeightSheet open={weightDate !== null} onClose={() => setWeightDate(null)} initialDate={weightDate ?? viewKey} now={now} />
       <EditMealSheet group={editing} onClose={() => setEditing(null)} />
     </View>
   );

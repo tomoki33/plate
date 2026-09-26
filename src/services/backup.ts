@@ -37,6 +37,7 @@ export async function buildPayload(): Promise<BackupPayload> {
       meal_set: await db.select().from(s.mealSet),
       meal_entry: await db.select().from(s.mealEntry),
       day_target: await db.select().from(s.dayTarget),
+      pace_suggestion: await db.select().from(s.paceSuggestion),
       kv: await db.select().from(s.kv),
     },
   };
@@ -84,6 +85,7 @@ export async function applyPayload(p: BackupPayload): Promise<{ ok: boolean; err
       await tx.delete(s.workoutSet);
       await tx.delete(s.workoutSession);
       await tx.delete(s.dayTarget);
+      await tx.delete(s.paceSuggestion);
       await tx.delete(s.mealSet);
       await tx.delete(s.kv);
       await tx.delete(s.weekPlan);
@@ -106,6 +108,7 @@ export async function applyPayload(p: BackupPayload): Promise<{ ok: boolean; err
       await ins(s.workoutSession as never, t.workout_session ?? []);
       await ins(s.workoutSet as never, t.workout_set ?? []);
       await ins(s.dayTarget as never, t.day_target ?? []);
+      await ins(s.paceSuggestion as never, t.pace_suggestion ?? []);
       await ins(s.kv as never, t.kv ?? []);
     });
     return { ok: true };

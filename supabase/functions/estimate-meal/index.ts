@@ -1,4 +1,4 @@
-// AI食事推定：文章 →（食品名・g・kcal・P・F・C）のJSON。
+// AI食事推定：写真・文章 →（食品名・g）のJSON。PFCはアプリが成分表から計算する。
 // APIキーは端末に置かず、ここ（Supabase Edge Function）だけが持つ。
 //
 // デプロイ:
@@ -20,15 +20,8 @@ const SCHEMA = {
       type: 'array',
       items: {
         type: 'object',
-        properties: {
-          name: { type: 'string' },
-          grams: { type: 'number' },
-          kcal: { type: 'number' },
-          p: { type: 'number' },
-          f: { type: 'number' },
-          c: { type: 'number' },
-        },
-        required: ['name', 'grams', 'kcal', 'p', 'f', 'c'],
+        properties: { name: { type: 'string' }, grams: { type: 'number' } },
+        required: ['name', 'grams'],
         additionalProperties: false,
       },
     },
@@ -37,11 +30,13 @@ const SCHEMA = {
   additionalProperties: false,
 };
 
-const SYSTEM = `あなたは日本の食事の栄養を推定する係です。ユーザーの文章から、食べたものを1品ずつに分け、
-それぞれの重さ(g)と、その重さ全体のエネルギー(kcal)・たんぱく質(g)・脂質(g)・炭水化物(g)を推定してJSONで返します。
-- 数値は日本食品標準成分表（八訂）に近い値にする。量が書かれていなければ、一般的な1食分を仮定する。
-- 「2個」「1杯」などは、一般的な重さに換算してgにする。
-- 食べ物でない文章や、判断できない語は items に含めない。
+// PFC は AI に出させない。食品ごとの名前と重さだけを返させ、アプリ側で日本食品標準成分表（八訂）の値から計算する。
+const SYSTEM = `あなたは日本の食事を読み取る係です。ユーザーの写真や文章から、食べたものを1品ずつに分け、
+それぞれの名前と重さ(g)をJSONで返します。
+- 名前は、日本食品標準成分表（八訂）で探しやすい一般的な食品名にする（例：鶏むね肉、ごはん、味噌汁、鶏卵、納豆）。
+- 重さ(g)は、写真や文章から見積もる。量が分からないものは、一般的な1食分を仮定する。「2個」「1杯」などはgに換算する。
+- ユーザーが「ひとこと」で補足したとき（例：米は半分残した）は、それを量に反映する。
+- 食べ物でないもの、判断できないものは items に含めない。
 - 説明文は書かず、指定のJSONだけを返す。`;
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -57,12 +52,19 @@ Deno.serve(async (req) => {
   if (!u.user) return json({ error: 'unauthorized' }, 401);
 
   let text = '';
+  let image = '';
+  let mediaType = 'image/jpeg';
   try {
-    text = String((await req.json()).text ?? '').trim();
+    const body = await req.json();
+    text = String(body.text ?? '').trim();
+    image = typeof body.image_base64 === 'string' ? body.image_base64 : '';
+    if (typeof body.media_type === 'string' && /^image\/(jpeg|png|webp)$/.test(body.media_type)) mediaType = body.media_type;
   } catch {
     return json({ error: 'bad request' }, 400);
   }
-  if (!text || text.length > 400) return json({ error: 'text must be 1-400 chars' }, 400);
+  if (text.length > 400) return json({ error: 'text must be at most 400 chars' }, 400);
+  if (!text && !image) return json({ error: 'text or image is required' }, 400);
+  if (image.length > 6_000_000) return json({ error: 'image too large' }, 413);
 
   const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
   const { data: ok, error: qerr } = await admin.rpc('consume_ai_quota', { p_user: u.user.id, p_limit: DAILY_LIMIT });
@@ -76,7 +78,15 @@ Deno.serve(async (req) => {
       model: MODEL,
       max_tokens: 1024,
       system: SYSTEM,
-      messages: [{ role: 'user', content: text }],
+      messages: [
+        {
+          role: 'user',
+          content: [
+            ...(image ? [{ type: 'image', source: { type: 'base64', media_type: mediaType, data: image } }] : []),
+            { type: 'text', text: text ? (image ? `ひとこと：${text}` : text) : 'この写真に写っている食事を読み取ってください。' },
+          ],
+        },
+      ],
       output_config: { format: { type: 'json_schema', schema: SCHEMA } },
     }),
   });
@@ -88,7 +98,7 @@ Deno.serve(async (req) => {
     const parsed = JSON.parse(raw);
     // 値の妥当性を確認してから返す（極端な値は捨てる）
     const items = (parsed.items ?? []).filter(
-      (i: Record<string, unknown>) => typeof i.name === 'string' && [i.grams, i.kcal, i.p, i.f, i.c].every((n) => typeof n === 'number' && Number.isFinite(n) && (n as number) >= 0) && (i.grams as number) > 0 && (i.grams as number) <= 3000 && (i.kcal as number) <= 5000,
+      (i: Record<string, unknown>) => typeof i.name === 'string' && typeof i.grams === 'number' && Number.isFinite(i.grams) && (i.grams as number) > 0 && (i.grams as number) <= 3000,
     );
     return json({ items });
   } catch {

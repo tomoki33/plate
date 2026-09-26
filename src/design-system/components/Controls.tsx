@@ -81,3 +81,48 @@ export function Notice({ children, tone = 'brand' }: { children: React.ReactNode
     </View>
   );
 }
+
+/** 白地のカード（0.5pxの線・角丸10）。設定の各まとまりに使う */
+export function Card({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+  return <View style={[{ marginHorizontal: 16, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line, borderRadius: radius.card, overflow: 'hidden' }, style]}>{children}</View>;
+}
+
+/** カードの中の行（高さ52・下に0.5pxの線。最後の行は線なし） */
+export function CardRow({ title, meta, right, onPress, last, minHeight = 52, dot }: { title: string; meta?: string; right?: React.ReactNode; onPress?: () => void; last?: boolean; minHeight?: number; dot?: string }) {
+  const body = (
+    <View style={{ minHeight, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingLeft: 14, paddingRight: 6, borderBottomWidth: last ? 0 : hairline, borderBottomColor: color.line }}>
+      <View style={{ flex: 1, paddingVertical: 6 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {dot ? <View style={{ width: 14, height: 4, borderRadius: 2, backgroundColor: dot }} /> : null}
+          <T size={14}>{title}</T>
+        </View>
+        {meta ? <T size={11} c={color.sub}>{meta}</T> : null}
+      </View>
+      {right ? <View style={{ paddingRight: 8 }}>{right}</View> : null}
+    </View>
+  );
+  return onPress ? (
+    <Pressable accessibilityRole="button" onPress={onPress}>
+      {body}
+    </Pressable>
+  ) : (
+    body
+  );
+}
+
+/** ＋−（44pt角）と、その間の値。カードの中で使う小さな調整 */
+export function InlineStepper({ value, onDown, onUp, width = 60, size = 14, sub }: { value: string; onDown: () => void; onUp: () => void; width?: number; size?: number; sub?: boolean }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <Pressable accessibilityRole="button" accessibilityLabel="減らす" onPress={onDown} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+        <T size={18}>−</T>
+      </Pressable>
+      <View style={{ minWidth: width, alignItems: 'center' }}>
+        <N size={size} w={600} c={sub ? color.badgeFg : color.text}>{value}</N>
+      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel="増やす" onPress={onUp} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+        <T size={18}>＋</T>
+      </Pressable>
+    </View>
+  );
+}

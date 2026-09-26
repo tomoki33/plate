@@ -45,7 +45,7 @@ function group(date: string, at: number, slot: Slot, name: string, items: Item[]
     return {
       id: uuid(), date, slot, foodId: f.id, groupId, groupName: name, name: f.name, grams: g,
       kcal: Math.round((f.kcal * g) / 100), P: round1((f.p * g) / 100), F: round1((f.f * g) / 100), C: round1((f.c * g) / 100),
-      ai: !!opts.ai, createdAt: at + i,
+      ai: !!opts.ai, photoUri: null, inputType: opts.ai ? 'text' : 'set', createdAt: at + i,
     };
   });
 }
@@ -82,7 +82,8 @@ export async function insertSampleData(now = new Date()): Promise<void> {
   for (let i = 21; i >= 1; i--) {
     if (i === 9) continue; // 1日抜ける
     const d = addDays(now, -i);
-    const kg = Math.round((72.4 - 1.1 * ((21 - i) / 21) + Math.sin(i * 1.7) * 0.25) * 10) / 10;
+    // 予定（−0.47kg/週）より遅めの減り方にして、レビューの「ペースの見直し」が出るようにする
+    const kg = Math.round((72.4 - 0.45 * ((21 - i) / 21) + Math.sin(i * 1.7) * 0.25) * 10) / 10;
     const fromHealth = i === 2 || i === 8 || i === 15;
     await repo.saveBodyLog(uuid(), dateKey(d), kg, fromHealth ? 'healthkit' : 'manual', fromHealth ? Math.round((16.8 - (21 - i) * 0.03) * 10) / 10 : null);
   }
@@ -151,12 +152,14 @@ export async function insertSampleData(now = new Date()): Promise<void> {
   await repo.setKv(`ai:${today}`, '1');
 
   await useStore.getState().reload();
+  // 目標体重が未設定なら入れる（体重の詳細と到達予測を試せるように）
+  if (useStore.getState().profile.goalWeightKg === null) useStore.getState().setGoalWeight(69);
 }
 
 /** 初回起動から、サンプルつきで始める（開発用）。オンボーディングを済ませてから、サンプルを入れる */
 export async function startWithSampleData(): Promise<void> {
   useStore.getState().skipLogin();
-  useStore.getState().completeOnboarding({ sex: 'male', birthYear: 1995, heightCm: 172, activity: 1.55, goal: 'cut', pace: -0.47, weight: 71.5 });
+  useStore.getState().completeOnboarding({ sex: 'male', birthYear: 1995, heightCm: 172, activity: 1.55, goal: 'cut', pace: -0.47, weight: 71.5, goalWeight: 69 });
   await new Promise((r) => setTimeout(r, 300)); // 書き込みが終わるのを待つ
   await insertSampleData();
 }

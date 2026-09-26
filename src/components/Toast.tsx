@@ -22,7 +22,7 @@ export function ToastHost() {
               hide();
             }}
           >
-            <T size={13} w={700} c={color.brand}>
+            <T size={13} w={700} c={color.brandPale2}>
               取消
             </T>
           </Pressable>

@@ -32,6 +32,7 @@ export default function Onboarding() {
   const [activity, setActivity] = useState(1.55);
   const [goal, setGoal] = useState<Goal>('cut');
   const [pace, setPace] = useState(defaultPace('cut', 70));
+  const [goalWeight, setGoalWeight] = useState<number | null>(null);
 
   const p = useMemo(() => {
     const now = new Date();
@@ -45,7 +46,10 @@ export default function Onboarding() {
   const pickGoal = (g: Goal) => {
     setGoal(g);
     setPace(defaultPace(g, weight));
+    setGoalWeight(null);
   };
+  // 目標体重：触るまでは、目的に合わせた既定値（減量は−3kg、増量は+3kg、維持は今の体重）
+  const goalW = goalWeight ?? Math.round((weight + (goal === 'cut' ? -3 : goal === 'bulk' ? 3 : 0)) * 2) / 2;
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: color.bg }} contentContainerStyle={{ paddingTop: insets.top + 24, paddingBottom: insets.bottom + 32, paddingHorizontal: 22 }}>
@@ -92,6 +96,7 @@ export default function Onboarding() {
       <View style={{ marginTop: 8 }}>
         <Segmented value={goal} onChange={pickGoal} options={(['cut', 'maintain', 'bulk'] as const).map((g) => ({ value: g, label: GOAL_JP[g] }))} />
       </View>
+      <ListRow title="目標体重" right={<NumberStepper value={goalW} onChange={setGoalWeight} step={0.5} min={30} max={200} decimals={1} unit="kg" width={72} accessibilityLabel="目標体重" />} />
       {goal !== 'maintain' && (
         <>
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
@@ -114,7 +119,7 @@ export default function Onboarding() {
         <View key={w.code} style={{ marginTop: 10 }}><Notice>{w.text}</Notice></View>
       ))}
 
-      <PrimaryButton label="はじめる" style={{ marginTop: 24 }} disabled={p.warnings.some((w) => w.code === 'below-floor')} onPress={() => complete({ sex, birthYear, heightCm, activity, goal, pace: p.pace, weight })} />
+      <PrimaryButton label="はじめる" style={{ marginTop: 24 }} disabled={p.warnings.some((w) => w.code === 'below-floor')} onPress={() => complete({ sex, birthYear, heightCm, activity, goal, pace: p.pace, weight, goalWeight: goalW })} />
       <T size={11} c={color.sub} style={{ marginTop: 10, textAlign: 'center' }}>はじめの{TRIAL_DAYS}日間は、有料の機能もすべて使えます。</T>
       {__DEV__ && (
         <Pressable accessibilityRole="button" onPress={() => void startWithSampleData()} style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center', marginTop: 10 }}>

@@ -142,9 +142,11 @@ function friendly(msg: string): string {
 export interface Account {
   userId: string;
   email: string | null;
+  /** ログインに使った方法（apple / google / email） */
+  provider: string;
 }
 
-export const toAccount = (s: Session | null): Account | null => (s ? { userId: s.user.id, email: s.user.email ?? null } : null);
+export const toAccount = (s: Session | null): Account | null => (s ? { userId: s.user.id, email: s.user.email ?? null, provider: s.user.app_metadata?.provider ?? 'email' } : null);
 
 /** ログイン状態の変化を受け取る。返り値で購読を解除する */
 export function onAccountChange(cb: (a: Account | null) => void): () => void {

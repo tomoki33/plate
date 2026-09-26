@@ -4,7 +4,7 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { LogBox, Platform, useColorScheme, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import migrations from '../../drizzle/migrations';
@@ -13,7 +13,9 @@ import { runMigrations } from '../db/migrate';
 import { ToastHost } from '../components/Toast';
 import { T, applyScheme, color, lightPalette } from '@/design-system';
 import { checkPaid, identifyBilling, initBilling } from '../services/billing';
+import { readBodyComposition } from '../services/healthkit';
 import { currentSession, onAccountChange, toAccount } from '../services/supabase';
+import { runBackup } from '../store/backupRunner';
 import { useStore } from '../store/store';
 
 // 起動画面は、準備（フォント・DB・ログイン状態の確認）が終わるまで出したままにする
@@ -73,6 +75,12 @@ function App() {
   const setAccount = useStore((s) => s.setAccount);
   const authChecked = useStore((s) => s.authChecked);
   const loginDone = useStore((s) => s.loginSkipped || !!s.account);
+  const account = useStore((s) => s.account);
+  const lastBackupAt = useStore((s) => s.lastBackupAt);
+  const healthSync = useStore((s) => s.healthSync);
+  const showToast = useStore((s) => s.showToast);
+  const setWeight = useStore((s) => s.setWeight);
+  const prevAccount = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
     void bootstrap();
@@ -107,6 +115,28 @@ function App() {
     };
   }, [ready, setAccount]);
 
+  // ログインしたら、バックアップを始める。ログイン中は、1日に1回、自動でバックアップする
+  useEffect(() => {
+    if (!authChecked) return;
+    const id = account?.userId ?? null;
+    if (prevAccount.current === undefined) {
+      prevAccount.current = id;
+      if (id && (!lastBackupAt || Date.now() - lastBackupAt > 20 * 3600_000)) void runBackup();
+      return;
+    }
+    if (prevAccount.current === null && id) {
+      showToast('ログインしました。バックアップを始めます');
+      void runBackup();
+    }
+    prevAccount.current = id;
+  }, [authChecked, account, lastBackupAt, showToast]);
+
+  // ヘルスケア連携がオンなら、起動時に体重を取り込む（手入力の日は上書きしない）
+  useEffect(() => {
+    if (!ready || !healthSync) return;
+    void readBodyComposition(30).then((r) => r.rows.forEach((x) => setWeight(x.date, x.kg, { source: 'healthkit', bodyFat: x.bodyFatPct, silent: true })));
+  }, [ready, healthSync, setWeight]);
+
   const loaded = fontsLoaded && ready && authChecked;
   useEffect(() => {
     if (loaded || bootError) void SplashScreen.hideAsync().catch(() => {});
@@ -123,6 +153,7 @@ function App() {
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.bg } }}>
           <Stack.Protected guard={onboarded}>
             <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="weight" />
             <Stack.Screen name="template/[id]" options={{ presentation: 'modal' }} />
             <Stack.Screen name="my-foods" options={{ presentation: 'modal' }} />
             <Stack.Screen name="my-sets" options={{ presentation: 'modal' }} />

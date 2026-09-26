@@ -25,6 +25,8 @@ export interface LoadedData {
   aiUsed: Record<string, number>;
   kv: Record<string, string>;
   lastTargets: Record<string, { dayType: DayType; kcal: number; reason: string }>;
+  /** ペースの見直しに答えた週（週の月曜 → 答え） */
+  paceAnswers: Record<string, 'accepted' | 'dismissed'>;
 }
 
 export async function loadAll(): Promise<LoadedData> {
@@ -41,6 +43,8 @@ export async function loadAll(): Promise<LoadedData> {
     tdee: p.tdee,
     tdeeWeek: p.tdeeWeek,
     onboarded: p.onboarded,
+    goalWeightKg: p.goalWeightKg,
+    weekAdjustKcal: p.weekAdjustKcal,
   };
 
   const body = await db.select().from(s.bodyLog).where(alive(s.bodyLog)).orderBy(s.bodyLog.date);
@@ -69,6 +73,8 @@ export async function loadAll(): Promise<LoadedData> {
     F: m.f,
     C: m.c,
     ai: m.ai,
+    photoUri: m.photoUri,
+    inputType: m.inputType,
     createdAt: m.createdAt,
   }));
 
@@ -131,7 +137,10 @@ export async function loadAll(): Promise<LoadedData> {
   const lastTargets: LoadedData['lastTargets'] = {};
   for (const t of targets) lastTargets[t.date] = { dayType: t.dayType, kcal: t.kcal, reason: t.reason };
 
-  return { profile, weights, weightSources, bodyFat, meals, exercises, templates, weekPlan, sessions, mealSets, myFoods, aiUsed, kv, lastTargets };
+  const answers = await db.select().from(s.paceSuggestion).where(alive(s.paceSuggestion));
+  const paceAnswers: LoadedData['paceAnswers'] = Object.fromEntries(answers.map((a) => [a.weekStart, a.answer]));
+
+  return { profile, weights, weightSources, bodyFat, meals, exercises, templates, weekPlan, sessions, mealSets, myFoods, aiUsed, kv, lastTargets, paceAnswers };
 }
 
 const toFood = (f: typeof s.food.$inferSelect): FoodItem => ({ id: f.id, name: f.name, kcal: f.kcal, p: f.p, f: f.f, c: f.c, source: f.source, code: f.code, unitG: f.unitG, defaultG: f.defaultG });
@@ -155,6 +164,8 @@ export async function saveProfile(p: ProfileData, now = Date.now()) {
       tdee: p.tdee,
       tdeeWeek: p.tdeeWeek,
       onboarded: p.onboarded,
+      goalWeightKg: p.goalWeightKg,
+      weekAdjustKcal: p.weekAdjustKcal,
       updatedAt: now,
     })
     .where(eq(s.profile.id, 'me'));
@@ -171,6 +182,21 @@ export async function saveBodyLog(id: string, date: string, weightKg: number, so
   }
   await db.insert(s.bodyLog).values({ id, date, weightKg, bodyFatPct, source, updatedAt: now });
   return id;
+}
+
+/** その日の体重の記録を、手入力もヘルスケアも、すべて消す（論理削除） */
+export async function deleteWeightOn(date: string, now = Date.now()) {
+  await db.update(s.bodyLog).set({ deletedAt: now, updatedAt: now }).where(eq(s.bodyLog.date, date));
+}
+
+export async function savePaceAnswer(weekStart: string, deltaKcal: number, answer: 'accepted' | 'dismissed', now = Date.now()) {
+  await db
+    .insert(s.paceSuggestion)
+    .values({ id: weekStart, weekStart, deltaKcal, answer, updatedAt: now })
+    .onConflictDoUpdate({ target: s.paceSuggestion.id, set: { deltaKcal, answer, deletedAt: null, updatedAt: now } });
+}
+export async function deletePaceAnswer(weekStart: string, now = Date.now()) {
+  await db.update(s.paceSuggestion).set({ deletedAt: now, updatedAt: now }).where(eq(s.paceSuggestion.id, weekStart));
 }
 
 export async function deleteBodyLog(date: string, source: 'manual' | 'healthkit', now = Date.now()) {
@@ -196,6 +222,8 @@ export async function insertMeals(entries: MealEntry[], now = Date.now()) {
       f: m.F,
       c: m.C,
       ai: m.ai,
+      photoUri: m.photoUri,
+      inputType: m.inputType,
       createdAt: m.createdAt,
       updatedAt: now,
     })),
@@ -340,6 +368,7 @@ export async function clearLogs() {
   await db.delete(s.workoutSet);
   await db.delete(s.workoutSession);
   await db.delete(s.dayTarget);
+  await db.delete(s.paceSuggestion);
   await db.delete(s.kv).where(or(sql`${s.kv.key} LIKE 'ai:%'`, sql`${s.kv.key} LIKE 'dt:%'`)!);
 }
 
@@ -351,6 +380,7 @@ export async function wipeUserData() {
   await db.delete(s.workoutSet);
   await db.delete(s.workoutSession);
   await db.delete(s.dayTarget);
+  await db.delete(s.paceSuggestion);
   await db.delete(s.mealSet);
   // 無料体験の開始日と課金状態は、データ削除では消さない（削除で体験が延びないように）
   await db.delete(s.kv).where(notInArray(s.kv.key, ['trial_started_at', 'paid']));

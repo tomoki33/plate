@@ -114,6 +114,8 @@ export async function seedIfNeeded(now = Date.now()): Promise<void> {
       tdee: 2600,
       tdeeWeek: null,
       onboarded: false,
+      goalWeightKg: null,
+      weekAdjustKcal: 0,
       updatedAt: now,
     })
     .onConflictDoNothing();

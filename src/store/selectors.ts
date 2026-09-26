@@ -4,6 +4,7 @@ import { addDays, dateKey, weekdayIndex, weekStart } from '../domain/dates';
 import { featuresOf, planOf, trialDaysLeft, type Features, type Plan } from '../domain/entitlement';
 import type { MealEntry, SessionRecord, WorkoutTemplate } from '../domain/models';
 import { weekKcalOf } from '../domain/nutrition';
+import { avg7, etaLabel, etaTo, paceKgPerWeek, signed1, suggestPace, weekDiff, weightForProtein, type PaceSuggestion } from '../domain/weight';
 import type { DayTarget, DayType, Pfc } from '../domain/types';
 import { useStore } from './store';
 
@@ -17,6 +18,8 @@ export interface MealGroup {
   name: string;
   slot: MealEntry['slot'];
   ai: boolean;
+  /** 写真で記録した食事の写真（あれば） */
+  photoUri: string | null;
   kcal: number;
   createdAt: number;
   items: MealEntry[];
@@ -31,7 +34,7 @@ export function groupMeals(meals: MealEntry[]): MealGroup[] {
       g.items.push(m);
       g.kcal += m.kcal;
       g.ai = g.ai || m.ai;
-    } else map.set(m.groupId, { groupId: m.groupId, name: m.groupName, slot: m.slot, ai: m.ai, kcal: m.kcal, createdAt: m.createdAt, items: [m] });
+    } else map.set(m.groupId, { groupId: m.groupId, name: m.groupName, slot: m.slot, ai: m.ai, photoUri: m.photoUri, kcal: m.kcal, createdAt: m.createdAt, items: [m] });
   }
   return [...map.values()].sort((a, b) => a.createdAt - b.createdAt);
 }
@@ -82,8 +85,10 @@ export function useWeek(now: Date) {
     const monday = weekStart(now);
     const dates = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
     const planTypes = weekPlan.map((id) => templateType(templates, id));
-    const { kg, logged } = latestWeight(weights, todayKey);
-    const weekKcal = weekKcalOf(profile.tdee, profile.pace);
+    // Pの計算に使う体重は、1日の値ではなく7日平均
+    const { kg: latestKg, logged } = latestWeight(weights, todayKey);
+    const kg = weightForProtein(weights, now) ?? latestKg;
+    const weekKcal = weekKcalOf(profile.tdee, profile.pace) + profile.weekAdjustKcal;
 
     // 今日より前の日に食べた実績（記録がない日は null）
     const actuals = dates.slice(0, ti).map((d) => {
@@ -103,6 +108,56 @@ export function useWeek(now: Date) {
     const remaining: Pfc = { kcal: today.kcal - eaten.kcal, P: today.P - eaten.P, F: today.F - eaten.F, C: today.C - eaten.C };
     const todayWorkout: SessionRecord | null = sessions.filter((w) => w.date === todayKey).slice(-1)[0] ?? null;
     const todayTemplateId = weekPlan[ti];
-    return { ti, dates, planTypes, eng, plan: planned, today, todayKey, todayMeals, eaten, remaining, weight: kg, weightLogged: logged, changed: changedType !== null, todayWorkout, todayTemplateId, weekKcal, profile, weekPlan, templates, entitlement, features };
+    return { ti, dates, planTypes, eng, plan: planned, today, todayKey, todayMeals, eaten, remaining, weight: kg, latestWeight: latestKg, weightLogged: logged, changed: changedType !== null, todayWorkout, todayTemplateId, weekKcal, profile, weekPlan, templates, entitlement, features };
   }, [now, profile, weekPlan, templates, weights, dayTypes, meals, sessions, todayKey, entitlement, features]);
+}
+
+export interface WeightStats {
+  /** 今日の7日平均 */
+  avg: number | null;
+  /** 先週との差（7日平均） */
+  weekDiff: number | null;
+  /** 直近2週のペース（kg/週） */
+  pace: number | null;
+  planned: number;
+  goal: number | null;
+  /** 目標まで（kg）。届いていれば 0 */
+  left: number | null;
+  etaActual: string | null;
+  etaPlanned: string | null;
+  /** ペースの見直しの提案（出す条件を満たし、今週まだ答えていないときだけ） */
+  suggestion: PaceSuggestion | null;
+  /** 今週の月曜（ペースの見直しの答えを、週ごとに覚えるためのキー） */
+  weekKey: string;
+  /** 文字の表示：「直近2週 −0.2kg/週（予定 −0.5）」 */
+  paceLine: string | null;
+}
+
+/** 体重の7日平均・ペース・到達予測・ペースの見直し（レビューと体重の詳細で使う） */
+export function useWeightStats(now: Date): WeightStats {
+  const weights = useStore((s) => s.weights);
+  const profile = useStore((s) => s.profile);
+  const paceAnswers = useStore((s) => s.paceAnswers);
+  return useMemo(() => {
+    const avg = avg7(weights, now);
+    const pace = paceKgPerWeek(weights, now);
+    const planned = profile.pace;
+    const goal = profile.goalWeightKg;
+    const dir = profile.goal === 'bulk' ? 'up' : 'down';
+    const weekKey = dateKey(weekStart(now));
+    const eta = (p: number) => (avg !== null && goal !== null ? etaLabel(etaTo(avg, goal, p, now, dir)) : null);
+    return {
+      avg,
+      weekDiff: weekDiff(weights, now),
+      pace,
+      planned,
+      goal,
+      left: avg !== null && goal !== null ? Math.max(0, dir === 'down' ? avg - goal : goal - avg) : null,
+      etaActual: pace !== null ? eta(pace) : null,
+      etaPlanned: eta(planned),
+      suggestion: suggestPace({ planned, actual: pace, answeredThisWeek: paceAnswers[weekKey] !== undefined }),
+      weekKey,
+      paceLine: pace !== null ? `直近2週 ${signed1(pace)}kg/週（予定 ${signed1(planned)}）` : null,
+    };
+  }, [weights, profile.pace, profile.goalWeightKg, profile.goal, paceAnswers, now]);
 }

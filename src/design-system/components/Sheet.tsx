@@ -1,6 +1,6 @@
 import React from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, View } from 'react-native';
-import { color, radius } from '../theme';
+import { color, radius } from '../tokens';
 
 /** 下から出るシート。背景は rgba(31,23,18,.32) */
 export function Sheet({ visible, onClose, children }: { visible: boolean; onClose: () => void; children: React.ReactNode }) {

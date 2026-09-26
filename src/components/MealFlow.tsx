@@ -4,9 +4,7 @@ import { AI_LIMIT_FREE, estimateMeal, type EstimateRow } from '../domain/estimat
 import { calcPfc, FOOD_BY_ID, MY_SETS, searchFoods } from '../domain/foods';
 import type { Pfc } from '../domain/types';
 import { useStore } from '../store/store';
-import { color, font, hairline, radius } from '../theme';
-import { Sheet } from './Sheet';
-import { Badge, Hairline, N, PrimaryButton, StepButton, T } from './ui';
+import { Badge, color, font, hairline, Hairline, N, PrimaryButton, radius, Sheet, StepButton, T } from '@/design-system';
 
 type Mode = 0 | 1 | 2;
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
-import { color } from '../theme';
+import { color } from '@/design-system';
 
 export type TabIconName = 'today' | 'train' | 'review' | 'settings';
 

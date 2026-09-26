@@ -2,13 +2,12 @@ import React, { useMemo } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Line, Polyline } from 'react-native-svg';
-import { N, SectionLabel, T } from '../../components/ui';
+import { color, hairline, N, radius, SectionLabel, T } from '@/design-system';
 import { useNow } from '../../components/useNow';
 import { addDays, dateKey } from '../../domain/dates';
 import type { Macro } from '../../domain/types';
 import { sumMeals, useWeek } from '../../store/selectors';
 import { useStore } from '../../store/store';
-import { color, hairline, radius } from '../../theme';
 
 const BIG3 = ['スクワット', 'ベンチプレス', 'デッドリフト'];
 const fmt = (n: number) => Math.round(n).toLocaleString();

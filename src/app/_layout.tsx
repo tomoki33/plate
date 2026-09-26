@@ -7,7 +7,7 @@ import React from 'react';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ToastHost } from '../components/Toast';
-import { color } from '../theme';
+import { color } from '@/design-system';
 
 export default function RootLayout() {
   const [loaded] = useFonts({

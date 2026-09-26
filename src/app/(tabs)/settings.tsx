@@ -1,12 +1,11 @@
 import React from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { N, OutlineButton, SectionLabel, StepButton, T } from '../../components/ui';
+import { color, hairline, N, OutlineButton, SectionLabel, StepButton, T } from '@/design-system';
 import { useNow } from '../../components/useNow';
 import { DAY_LABELS, DAY_TYPE_JP, type DayType } from '../../domain/types';
 import { planMenuOf, planTypeOf, useWeek } from '../../store/selectors';
 import { useStore } from '../../store/store';
-import { color, hairline } from '../../theme';
 
 const fmt = (n: number) => Math.round(n).toLocaleString();
 const TYPE_COLOR: Record<DayType, string> = { high: color.brand, normal: color.brandPale2, off: color.off };

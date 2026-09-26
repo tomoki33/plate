@@ -2,13 +2,12 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Badge, N, OutlineButton, PrimaryButton, StepButton, T } from '../../components/ui';
+import { Badge, color, hairline, N, OutlineButton, PrimaryButton, radius, StepButton, T } from '@/design-system';
 import { useNow } from '../../components/useNow';
 import { DEFAULT_MEDIAN_VOLUME, median, TEMPLATES } from '../../domain/training';
 import { DAY_LABELS, DAY_TYPE_JP } from '../../domain/types';
 import { useWeek } from '../../store/selectors';
 import { useStore } from '../../store/store';
-import { color, hairline, radius } from '../../theme';
 
 const fmt = (n: number) => Math.round(n).toLocaleString();
 const sign = (n: number) => (n >= 0 ? '+' : '−');

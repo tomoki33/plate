@@ -3,14 +3,13 @@ import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MealFlow } from '../../components/MealFlow';
-import { Bar, Badge, N, PrimaryButton, T } from '../../components/ui';
+import { Badge, Bar, color, hairline, N, PrimaryButton, radius, T } from '@/design-system';
 import { WeightSheet } from '../../components/WeightSheet';
 import { useNow } from '../../components/useNow';
 import { DAY_LABELS, DAY_TYPE_JP, type DayType, type Macro } from '../../domain/types';
 import { formatJpDate, dateKey } from '../../domain/dates';
 import { planMenuOf, sumMeals, weightAverage7, useWeek } from '../../store/selectors';
 import { useStore } from '../../store/store';
-import { color, hairline, radius } from '../../theme';
 
 const fmt = (n: number) => Math.round(n).toLocaleString();
 const TYPE_COLOR: Record<DayType, string> = { high: color.brand, normal: color.brandPale2, off: color.off };

@@ -1,8 +1,7 @@
 import React from 'react';
 import { Pressable, View } from 'react-native';
 import { useStore } from '../store/store';
-import { color, radius } from '../theme';
-import { T } from './ui';
+import { color, radius, T } from '@/design-system';
 
 export function ToastHost() {
   const toast = useStore((s) => s.toast);

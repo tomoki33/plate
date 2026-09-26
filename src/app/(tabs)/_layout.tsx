@@ -2,7 +2,7 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TabIcon, type TabIconName } from '../../components/TabIcons';
-import { color, font, hairline } from '../../theme';
+import { color, font, hairline } from '@/design-system';
 
 const TABS: { name: string; title: string; icon: TabIconName }[] = [
   { name: 'index', title: '今日', icon: 'today' },

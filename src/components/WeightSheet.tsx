@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { Sheet } from './Sheet';
-import { N, PrimaryButton, StepButton, T } from './ui';
-import { color } from '../theme';
+import { color, N, PrimaryButton, Sheet, StepButton, T } from '@/design-system';
 
 export function WeightSheet({ open, onClose, initial, onSave }: { open: boolean; onClose: () => void; initial: number; onSave: (kg: number) => void }) {
   const [kg, setKg] = useState(initial);

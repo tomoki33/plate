@@ -1,14 +1,14 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Badge, Bar, N, PrimaryButton, T, color, hairline, radius } from '@/design-system';
 import { MealFlow } from '../../components/MealFlow';
-import { Badge, Bar, color, hairline, N, PrimaryButton, radius, T } from '@/design-system';
 import { WeightSheet } from '../../components/WeightSheet';
 import { useNow } from '../../components/useNow';
+import { formatJpDate, dateKey, slotOf } from '../../domain/dates';
 import { DAY_LABELS, DAY_TYPE_JP, type DayType, type Macro } from '../../domain/types';
-import { formatJpDate, dateKey } from '../../domain/dates';
-import { planMenuOf, sumMeals, weightAverage7, useWeek } from '../../store/selectors';
+import { groupMeals, sumMeals, templateName, weightAverage7, useWeek } from '../../store/selectors';
 import { useStore } from '../../store/store';
 
 const fmt = (n: number) => Math.round(n).toLocaleString();
@@ -22,17 +22,20 @@ const sign = (n: number) => (n >= 0 ? '+' : '−');
 
 export default function TodayScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const now = useNow();
   const w = useWeek(now);
   const meals = useStore((s) => s.meals);
   const weights = useStore((s) => s.weights);
-  const removeMeal = useStore((s) => s.removeMeal);
+  const removeMealGroup = useStore((s) => s.removeMealGroup);
   const setWeight = useStore((s) => s.setWeight);
+  const maybeUpdateTdee = useStore((s) => s.maybeUpdateTdee);
+  const recordTarget = useStore((s) => s.recordTarget);
   const [viewDay, setViewDay] = useState<number | null>(null);
   const [sheet, setSheet] = useState<null | 'meal' | 'weight'>(null);
   const [mode, setMode] = useState<0 | 1 | 2>(0);
-  const router = useRouter();
   const { meal } = useLocalSearchParams<{ meal?: string }>();
+
   useEffect(() => {
     if (meal) {
       setViewDay(null);
@@ -42,27 +45,41 @@ export default function TodayScreen() {
     }
   }, [meal, router]);
 
+  // 週が変わったら、実データで維持カロリーを補正する
+  const weekKey = dateKey(w.dates[0]);
+  useEffect(() => {
+    maybeUpdateTdee(now);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekKey]);
+
+  // 今日の目標が変わったら履歴に残す（再配分の理由つき）
+  const t = w.today;
+  useEffect(() => {
+    const reason = w.changed ? (w.todayWorkout ? 'workout' : 'day-type') : Math.abs(t.kcal - w.plan.days[w.ti].kcal) > 1 ? 'intake' : 'plan';
+    recordTarget(w.todayKey, { dayType: t.type, kcal: t.kcal, P: t.P, F: t.F, C: t.C }, reason);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [w.todayKey, t.type, t.kcal, t.P, t.F, t.C]);
+
   const vd = viewDay ?? w.ti;
   const isToday = vd === w.ti;
   const dd = w.eng.days[vd];
   const maxK = Math.max(...w.eng.days.map((d) => d.kcal));
   const viewKey = dateKey(w.dates[vd]);
-  const viewEaten = sumMeals(meals.filter((m) => m.date === viewKey));
+  const viewEaten = useMemo(() => sumMeals(meals.filter((m) => m.date === viewKey)), [meals, viewKey]);
   const past = vd < w.ti;
+  const linked = w.features.linkedTargets;
 
-  const menuOf = (i: number) => (i === w.ti && w.todayWorkout ? w.todayWorkout.name : i === w.ti && w.eng.days[i].type === 'off' ? 'オフ' : planMenuOf(w.settings.plan[i]));
+  const menuOf = (i: number) => (i === w.ti && w.todayWorkout ? w.todayWorkout.name : i === w.ti && dd && w.eng.days[i].type === 'off' && w.changed ? 'オフ' : templateName(w.templates, w.weekPlan[i]));
   const badgeText = (i: number) => (w.eng.days[i].type === 'off' ? 'オフ' : `${menuOf(i)}・${DAY_TYPE_JP[w.eng.days[i].type]}`);
 
   const dC = w.today.C - w.plan.days[w.ti].C;
-
-  // 状態の行
   let lineL = '';
   let lineR = '';
   let lineC: string = color.badgeFg;
   if (isToday) {
     if (w.todayWorkout) {
-      const t = new Date(w.todayWorkout.finishedAt);
-      lineL = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')} ${w.todayWorkout.name} 完了`;
+      const tm = new Date(w.todayWorkout.endedAt);
+      lineL = `${String(tm.getHours()).padStart(2, '0')}:${String(tm.getMinutes()).padStart(2, '0')} ${w.todayWorkout.name} 完了`;
       lineR = w.changed ? `目標変更 C${sign(dC)}${Math.abs(dC)}g` : '予定どおり・目標そのまま';
       lineC = color.brandText;
     } else if (w.changed) {
@@ -71,24 +88,25 @@ export default function TodayScreen() {
       lineC = color.brandText;
     } else if (w.today.type === 'off') {
       lineL = 'トレなし';
-      lineR = 'Pは維持、Cを減らす';
+      lineR = linked ? 'Pは維持、Cを減らす' : '';
     } else {
-      lineL = `${planMenuOf(w.settings.plan[w.ti])}の予定`;
+      lineL = `${templateName(w.templates, w.todayTemplateId)}の予定`;
       lineR = 'トレ前';
     }
   } else if (past) {
     lineL = '記録済み';
     lineR = viewEaten.kcal ? `実績 ${fmt(viewEaten.kcal)} kcal` : '記録なし';
   } else {
-    lineL = dd.type === 'off' ? 'トレなし' : `予定：${planMenuOf(w.settings.plan[vd])}`;
-    lineR = dd.type === 'off' ? 'Pは維持、Cを減らす' : '予定を変えたら残りの日に配り直し';
+    lineL = dd.type === 'off' ? 'トレなし' : `予定：${templateName(w.templates, w.weekPlan[vd])}`;
+    lineR = linked ? (dd.type === 'off' ? 'Pは維持、Cを減らす' : '予定を変えたら残りの日に配り直し') : '';
   }
 
   const rem = w.remaining;
   const kcalLabel = isToday ? (rem.kcal >= 0 ? '残り（目安）' : '超過（目安）') : past ? '実績' : '目標（目安）';
   const kcalBig = isToday ? Math.abs(rem.kcal) : past ? viewEaten.kcal : dd.kcal;
-  const kcalSub = isToday ? `/ 目標 ${fmt(dd.kcal)} kcal` : past ? `/ 目標 ${fmt(dd.kcal)} kcal` : 'kcal';
+  const kcalSub = isToday || past ? `/ 目標 ${fmt(dd.kcal)} kcal` : 'kcal';
   const avg7 = weightAverage7(weights, now);
+  const groups = useMemo(() => groupMeals(w.todayMeals), [w.todayMeals]);
   const openMeal = (m: 0 | 1 | 2 = 0) => {
     setMode(m);
     setSheet('meal');
@@ -134,7 +152,7 @@ export default function TodayScreen() {
         {/* PFC */}
         <View style={{ paddingHorizontal: 22, marginTop: 16, gap: 12 }}>
           {MACROS.map(([name, k, c]) => {
-            const eaten = isToday || past ? (isToday ? w.eaten[k] : viewEaten[k]) : 0;
+            const eaten = isToday ? w.eaten[k] : past ? viewEaten[k] : 0;
             const over = isToday && rem[k] < 0;
             return (
               <View key={k}>
@@ -142,12 +160,12 @@ export default function TodayScreen() {
                   <T size={12} w={700} c={c}>{name}</T>
                   {isToday ? (
                     <N size={20} w={600} c={over ? color.brandText : color.text}>
-                      {over ? `+${-rem[k]}` : `あと ${rem[k]}`}
+                      {over ? `+${Math.round(-rem[k])}` : `あと ${Math.round(rem[k])}`}
                       <T size={12} c={color.sub}> g / {dd[k]}</T>
                     </N>
                   ) : (
                     <N size={20} w={600}>
-                      {past ? viewEaten[k] : dd[k]}
+                      {past ? Math.round(viewEaten[k]) : dd[k]}
                       <T size={12} c={color.sub}> g{past ? ` / ${dd[k]}` : ''}</T>
                     </N>
                   )}
@@ -163,6 +181,12 @@ export default function TodayScreen() {
           <T size={13} c={color.badgeFg}>{lineL}</T>
           <T size={13} w={700} c={lineC}>{lineR}</T>
         </View>
+
+        {!linked && (
+          <Pressable accessibilityRole="button" onPress={() => router.push('/paywall')} style={{ marginHorizontal: 22, minHeight: 44, justifyContent: 'center', borderBottomWidth: hairline, borderBottomColor: color.line }}>
+            <T size={12} c={color.sub}>目標は毎日同じです。トレに合わせて変わる「日タイプ連動」は有料プランで使えます。 <T size={12} w={700}>プランを見る ›</T></T>
+          </Pressable>
+        )}
 
         {isToday && (
           <>
@@ -182,15 +206,15 @@ export default function TodayScreen() {
 
             {/* 食事リスト */}
             <View style={{ marginTop: 14, paddingHorizontal: 22 }}>
-              <T size={11} c={color.sub}>食事 {w.todayMeals.length}件</T>
-              {w.todayMeals.length === 0 && <T size={13} c={color.sub} style={{ paddingVertical: 16 }}>まだ記録がありません。</T>}
-              {w.todayMeals.map((m) => (
-                <View key={m.id} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', borderBottomWidth: hairline, borderBottomColor: color.line }}>
-                  <T size={12} c={color.sub} style={{ width: 36 }}>{m.slot}</T>
-                  <T size={14} style={{ flex: 1 }} numberOfLines={1}>{m.name}</T>
-                  {m.ai && <Badge high>AI</Badge>}
-                  <N size={15} w={500} style={{ marginLeft: 8, minWidth: 40, textAlign: 'right' }}>{fmt(m.kcal)}</N>
-                  <Pressable accessibilityRole="button" accessibilityLabel={`${m.name}を削除`} onPress={() => removeMeal(m.id)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+              <T size={11} c={color.sub}>食事 {groups.length}件</T>
+              {groups.length === 0 && <T size={13} c={color.sub} style={{ paddingVertical: 16 }}>まだ記録がありません。</T>}
+              {groups.map((g) => (
+                <View key={g.groupId} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', borderBottomWidth: hairline, borderBottomColor: color.line }}>
+                  <T size={12} c={color.sub} style={{ width: 36 }}>{g.slot}</T>
+                  <T size={14} style={{ flex: 1 }} numberOfLines={1}>{g.name}</T>
+                  {g.ai && <Badge high>AI</Badge>}
+                  <N size={15} w={500} style={{ marginLeft: 8, minWidth: 40, textAlign: 'right' }}>{fmt(g.kcal)}</N>
+                  <Pressable accessibilityRole="button" accessibilityLabel={`${g.name}を削除`} onPress={() => removeMealGroup(g.groupId)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
                     <T size={16} c={color.sub}>×</T>
                   </Pressable>
                 </View>
@@ -205,7 +229,7 @@ export default function TodayScreen() {
         <PrimaryButton label={isToday ? '食事を記録' : '今日に戻る'} onPress={() => (isToday ? openMeal(0) : setViewDay(null))} />
       </View>
 
-      <MealFlow open={sheet === 'meal'} initialMode={mode} onClose={() => setSheet(null)} remaining={rem} todayKey={w.todayKey} postWorkout={!!w.todayWorkout} />
+      <MealFlow open={sheet === 'meal'} initialMode={mode} onClose={() => setSheet(null)} remaining={rem} todayKey={w.todayKey} slot={slotOf(now)} postWorkout={!!w.todayWorkout} aiLimit={w.features.aiLimit} />
       <WeightSheet open={sheet === 'weight'} onClose={() => setSheet(null)} initial={w.weight} onSave={(kg) => setWeight(w.todayKey, kg)} />
     </View>
   );

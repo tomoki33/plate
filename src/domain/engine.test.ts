@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { computeTargets } from './engine';
+import type { ExerciseLog } from './models';
 import { bestSet, decideDayType, estimate1RM, median, volumeScore } from './training';
-import { TEMPLATES } from './training';
 import type { EngineInput } from './types';
 
 const base: EngineInput = {
@@ -62,19 +62,23 @@ describe('training', () => {
     expect(estimate1RM(100, 30)).toBeCloseTo(200);
   });
   it('ボリュームスコアは完了セットの部位係数の合計', () => {
-    const ex = TEMPLATES.legs.exercises.map((e) => ({
-      ...e,
-      prevKg: e.kg,
-      prevReps: e.reps,
-      sets: [{ kg: e.kg, reps: e.reps, done: true }, { kg: e.kg, reps: e.reps, done: false }],
-    }));
+    const mk = (name: string, kg: number): ExerciseLog => ({
+      exerciseId: name,
+      name,
+      part: '脚',
+      coef: 1.5,
+      prevKg: kg,
+      prevReps: 5,
+      sets: [{ kg, reps: 5, done: true }, { kg, reps: 5, done: false }],
+    });
+    const ex = [mk('スクワット', 120), mk('レッグカール', 40), mk('カーフレイズ', 60), mk('ランジ', 30)];
     expect(volumeScore(ex)).toBeCloseTo(4 * 1.5);
     expect(bestSet(ex)?.name).toBe('スクワット');
   });
   it('日タイプ：中央値の1.3倍以上なら高', () => {
-    expect(decideDayType(TEMPLATES.back, 14.3, 11)).toBe('high');
-    expect(decideDayType(TEMPLATES.back, 14.2, 11)).toBe('normal');
-    expect(decideDayType(TEMPLATES.legs, 1, 11)).toBe('high');
+    expect(decideDayType('normal', 14.3, 11)).toBe('high');
+    expect(decideDayType('normal', 14.2, 11)).toBe('normal');
+    expect(decideDayType('high', 1, 11)).toBe('high');
   });
   it('中央値', () => {
     expect(median([])).toBe(11);

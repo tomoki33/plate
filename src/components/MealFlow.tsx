@@ -235,7 +235,7 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 8 }}>
           {mode === 0 && (
             <View>
-              <T size={11} c={color.sub} style={{ paddingHorizontal: 18, paddingTop: 14 }}>{postWorkout ? 'トレ後によく使う順' : '最近使った順'}</T>
+              <T size={11} c={color.sub} style={{ paddingHorizontal: 18, paddingTop: 14 }}>{postWorkout ? 'トレーニング後によく使う順' : '最近使った順'}</T>
               <View style={{ paddingHorizontal: 18, paddingTop: 4 }}>
                 {sets.length === 0 && <T size={13} c={color.sub} style={{ paddingVertical: 12 }}>マイセットはまだありません。文章入力の確認画面から登録できます。</T>}
                 {sets.map((m) => (
@@ -243,7 +243,7 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <T size={14} w={500}>{m.name}</T>
-                        {m.slotHint === hint && <Badge>{m.slotHint}</Badge>}
+                        {m.slotHint === hint && <Badge>{m.slotHint === 'トレ後' ? 'トレーニング後' : m.slotHint}</Badge>}
                       </View>
                       <N size={11} w={500} c={color.sub} style={{ marginTop: 2 }}>{pfcLine(setPfc(m))}</N>
                     </View>

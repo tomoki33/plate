@@ -54,7 +54,7 @@ export default function Onboarding() {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: color.bg }} contentContainerStyle={{ paddingTop: insets.top + 24, paddingBottom: insets.bottom + 32, paddingHorizontal: 22 }}>
       <T size={28} w={900} style={{ letterSpacing: 3 }}>PLATE</T>
-      <T size={13} c={color.sub} style={{ marginTop: 4 }}>今日のトレで、今日の一皿が決まる。</T>
+      <T size={13} c={color.sub} style={{ marginTop: 4 }}>今日のトレーニングで、今日の一皿が決まる。</T>
       {backupAt !== null && (
         <View style={{ marginTop: 20, padding: 14, borderRadius: radius.card, backgroundColor: color.brandPale, gap: 8 }}>
           <T size={13} w={700}>バックアップがあります</T>

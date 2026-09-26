@@ -15,8 +15,8 @@ export interface ActivityLevel {
 }
 export const ACTIVITY_LEVELS: ActivityLevel[] = [
   { value: 1.375, label: '低め', note: '週1〜2回の運動、デスクワーク中心' },
-  { value: 1.55, label: '標準', note: '週3〜5回のトレ、立ち仕事も少し' },
-  { value: 1.725, label: '高め', note: '週5回以上のトレ、体を使う仕事' },
+  { value: 1.55, label: '標準', note: '週3〜5回のトレーニング、立ち仕事も少し' },
+  { value: 1.725, label: '高め', note: '週5回以上のトレーニング、体を使う仕事' },
 ];
 
 export interface Profile {

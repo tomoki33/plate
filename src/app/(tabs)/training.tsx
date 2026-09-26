@@ -39,75 +39,71 @@ export default function TrainingScreen() {
 
   if (session) return <Recording insetsTop={insets.top} />;
 
-  const smallBtn = (label: string, onPress: () => void) => (
-    <Pressable accessibilityRole="button" onPress={onPress} style={{ minHeight: 44, minWidth: 64, paddingHorizontal: 12, borderWidth: hairline, borderColor: color.text, borderRadius: radius.input, alignItems: 'center', justifyContent: 'center' }}>
-      <T size={12} w={700}>{label}</T>
-    </Pressable>
-  );
-
   return (
     <View style={{ flex: 1, backgroundColor: color.bg }}>
       <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: 40 }}>
-        <T size={22} w={900} style={{ paddingHorizontal: 20 }}>トレ</T>
+        <T size={22} w={900} style={{ paddingHorizontal: 20 }}>トレーニング</T>
 
         {w.todayWorkout ? (
-          <View style={{ marginHorizontal: 16, marginTop: 14, padding: 14, borderRadius: radius.card, backgroundColor: color.brandPale, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <T size={13}><T size={13} w={700} c={color.brandText}>今日は完了</T>　{w.todayWorkout.name}</T>
+          <View style={{ marginHorizontal: 16, marginTop: 14, padding: 14, borderRadius: radius.card, backgroundColor: color.brandPale, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+            <T size={13} numberOfLines={1} style={{ flex: 1 }}><T size={13} w={700} c={color.brandText}>今日は完了</T>　{w.todayWorkout.name}</T>
             <Pressable accessibilityRole="button" onPress={() => setDoneOpen(true)} style={{ minHeight: 44, justifyContent: 'center' }}>
               <T size={13} w={700}>結果を見る ›</T>
             </Pressable>
           </View>
         ) : scheduled && w.today.type !== 'off' ? (
-          <View style={{ marginHorizontal: 16, marginTop: 14, padding: 16, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line, borderRadius: radius.card, gap: 12 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <T size={12} c={color.sub}>今日の予定</T>
-              <Badge high={scheduled.defaultDayType === 'high'}>{DAY_TYPE_JP[scheduled.defaultDayType]}</Badge>
+          <View style={{ marginHorizontal: 16, marginTop: 14, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line, borderRadius: radius.card, overflow: 'hidden' }}>
+            <View style={{ padding: 16, paddingBottom: 12, gap: 6 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <T size={12} c={color.sub}>今日の予定</T>
+                <Badge high={scheduled.defaultDayType === 'high'}>{DAY_TYPE_JP[scheduled.defaultDayType]}</Badge>
+              </View>
+              <T size={22} w={900}>{scheduled.name}</T>
+              <T size={12} c={color.sub}>{scheduled.exercises.length}種目・{scheduled.exercises.reduce((a, e) => a + e.sets, 0)}セット</T>
             </View>
-            <T size={20} w={900}>{scheduled.name}</T>
-            <T size={12} c={color.sub}>{scheduled.exercises.map((e) => exName(e.exerciseId)).join('・')}　{scheduled.exercises.length}種目</T>
-            <PrimaryButton label="開始" onPress={() => startSession(scheduled.id)} />
+            {/* 種目は1行ずつ（メニューの中身が、ひと目で分かる） */}
+            <View style={{ paddingHorizontal: 16 }}>
+              {scheduled.exercises.map((e, i) => (
+                <View key={`${e.exerciseId}-${i}`} style={{ minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: hairline, borderTopColor: color.line }}>
+                  <N size={12} w={600} c={color.faint} style={{ width: 16 }}>{i + 1}</N>
+                  <T size={14} numberOfLines={1} style={{ flex: 1 }}>{exName(e.exerciseId)}</T>
+                  <N size={12} w={500} c={color.sub}>{e.sets}セット × {e.reps}回</N>
+                </View>
+              ))}
+            </View>
+            <View style={{ padding: 16, paddingTop: 14 }}>
+              <PrimaryButton label="開始" onPress={() => startSession(scheduled.id)} />
+            </View>
           </View>
         ) : (
           <View style={{ marginHorizontal: 16, marginTop: 14, padding: 16, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line, borderRadius: radius.card, gap: 4 }}>
             <T size={12} c={color.sub}>今日の予定</T>
-            <T size={20} w={900}>今日はオフ</T>
+            <T size={22} w={900}>今日はオフ</T>
             <T size={12} c={color.sub}>やる日に変えるときは、下から選べます。</T>
           </View>
         )}
 
         {!w.todayWorkout && (
           <>
-            <T size={11} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 4 }}>予定を変える</T>
-            <View style={{ paddingHorizontal: 20 }}>
+            <T size={11} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 22, paddingBottom: 6 }}>予定を変える</T>
+            <View style={{ marginHorizontal: 16, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line, borderRadius: radius.card, overflow: 'hidden' }}>
               {others.map((t) => (
-                <View key={t.id} style={{ minHeight: 52, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: hairline, borderBottomColor: color.line }}>
-                  <View style={{ flex: 1 }}>
-                    <T size={14}>{t.name}</T>
-                    <T size={11} c={color.sub}>{t.exercises.slice(0, 3).map((e) => exName(e.exerciseId)).join('・')}　日タイプ：{DAY_TYPE_JP[t.defaultDayType]}</T>
-                  </View>
-                  {smallBtn('開始', () => startSession(t.id))}
-                </View>
+                <PlanRow key={t.id} title={t.name} meta={`${t.exercises.length}種目・${t.exercises.reduce((a, e) => a + e.sets, 0)}セット・日タイプ ${DAY_TYPE_JP[t.defaultDayType]}`} action="開始" onPress={() => startSession(t.id)} />
               ))}
-              <View style={{ minHeight: 52, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: hairline, borderBottomColor: color.line }}>
-                <View style={{ flex: 1 }}>
-                  <T size={14}>フリートレ</T>
-                  <T size={11} c={color.sub}>テンプレートなし。種目をその場で選ぶ</T>
-                </View>
-                {smallBtn('開始', () => startSession(null))}
-              </View>
+              <PlanRow title="フリートレーニング" meta="種目をその場で選ぶ" action="開始" onPress={() => startSession(null)} last={w.today.type === 'off'} />
               {w.today.type !== 'off' && (
-                <View style={{ minHeight: 52, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: hairline, borderBottomColor: color.line }}>
-                  <View style={{ flex: 1 }}>
-                    <T size={14}>今日は休む</T>
-                    <T size={11} c={color.sub}>{w.features.linkedTargets ? 'オフにして、残りの日に配り直す' : 'オフにする（無料プランでは目標は変わりません）'}</T>
-                  </View>
-                  {smallBtn('オフにする', () => {
+                <PlanRow
+                  title="今日は休む"
+                  meta={w.features.linkedTargets ? '残りの日に配り直す' : '目標は変わりません（無料プラン）'}
+                  action="オフにする"
+                  last
+                  onPress={() => {
                     const prev = useStore.getState().dayTypes[w.todayKey] ?? null;
                     setDayType(w.todayKey, 'off');
                     showToast(w.features.linkedTargets ? '今日をオフに変更。目標を配り直しました' : '今日をオフにしました', () => useStore.getState().setDayType(w.todayKey, prev));
                     router.navigate('/');
-                  })}
-                </View>
+                  }}
+                />
               )}
             </View>
           </>
@@ -115,7 +111,7 @@ export default function TrainingScreen() {
 
         <T size={11} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 4 }}>履歴</T>
         <View style={{ paddingHorizontal: 20 }}>
-          {history.length === 0 && <T size={13} c={color.sub} style={{ paddingVertical: 14 }}>まだトレの記録がありません。</T>}
+          {history.length === 0 && <T size={13} c={color.sub} style={{ paddingVertical: 14 }}>まだトレーニングの記録がありません。</T>}
           {history.map((h) => {
             const d = new Date(h.endedAt);
             const isOpen = open === h.id;
@@ -123,11 +119,11 @@ export default function TrainingScreen() {
             return (
               <View key={h.id} style={{ borderBottomWidth: hairline, borderBottomColor: color.line }}>
                 <Pressable accessibilityRole="button" onPress={() => { setOpen(isOpen ? null : h.id); setConfirm(null); }} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <View style={{ flexDirection: 'row' }}>
-                    <T size={13} c={color.sub} style={{ width: 52 }}>{d.getMonth() + 1}/{d.getDate()} {DAY_LABELS[(d.getDay() + 6) % 7]}</T>
-                    <T size={13}>{h.name}</T>
+                  <View style={{ flexDirection: 'row', flex: 1, minWidth: 0 }}>
+                    <T size={13} c={color.sub} style={{ width: 56 }}>{d.getMonth() + 1}/{d.getDate()} {DAY_LABELS[(d.getDay() + 6) % 7]}</T>
+                    <T size={13} numberOfLines={1} style={{ flex: 1 }}>{h.name}</T>
                   </View>
-                  <T size={13} c={color.sub}>{h.doneSets}セット・{mins}分</T>
+                  <T size={12} c={color.sub} numberOfLines={1} style={{ marginLeft: 8 }}>{h.doneSets}セット・{mins}分</T>
                 </Pressable>
                 {isOpen && (
                   <View style={{ paddingBottom: 10, gap: 4 }}>
@@ -289,7 +285,7 @@ function Recording({ insetsTop }: { insetsTop: number }) {
 
       <View style={{ paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row', gap: 8 }}>
         {hasNext && <OutlineButton label="次の種目" onPress={s.nextExercise} style={{ flex: 1 }} />}
-        <PrimaryButton label="トレを完了" onPress={() => s.finishSession()} style={{ flex: 1 }} />
+        <PrimaryButton label="トレーニングを完了" onPress={() => s.finishSession()} style={{ flex: 1 }} />
       </View>
       <ExercisePicker open={picker} onClose={() => setPicker(false)} onPick={(e) => s.addExerciseToSession(e.id)} />
     </View>
@@ -341,7 +337,7 @@ function DoneModal({ open, onClose, onMeal, w, median: med }: { open: boolean; o
         )}
         {!w.features.linkedTargets && (
           <View style={{ marginHorizontal: 22, marginTop: 14 }}>
-            <Notice tone="plain">無料プランでは、トレの内容で目標は変わりません。日タイプ連動は有料プランで使えます。</Notice>
+            <Notice tone="plain">無料プランでは、トレーニングの内容で目標は変わりません。日タイプ連動は有料プランで使えます。</Notice>
           </View>
         )}
         <View style={{ marginHorizontal: 22, marginTop: 18, borderTopWidth: hairline, borderTopColor: color.line }}>
@@ -355,9 +351,24 @@ function DoneModal({ open, onClose, onMeal, w, median: med }: { open: boolean; o
         <View style={{ flex: 1 }} />
         <View style={{ paddingHorizontal: 16, paddingBottom: 34, flexDirection: 'row', gap: 8 }}>
           <OutlineButton label="閉じる" onPress={onClose} style={{ flex: 1 }} />
-          <PrimaryButton label="トレ後の食事を記録" onPress={onMeal} style={{ flex: 1.4 }} />
+          <PrimaryButton label="トレーニング後の食事を記録" onPress={onMeal} style={{ flex: 1.4 }} />
         </View>
       </View>
     </Modal>
+  );
+}
+
+/** 「予定を変える」の1行。名前とメタ情報は1行に収め、ボタンとは間をあける */
+function PlanRow({ title, meta, action, onPress, last }: { title: string; meta: string; action: string; onPress: () => void; last?: boolean }) {
+  return (
+    <View style={{ minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 14, paddingLeft: 16, paddingRight: 12, borderBottomWidth: last ? 0 : hairline, borderBottomColor: color.line }}>
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <T size={14} w={500} numberOfLines={1}>{title}</T>
+        <T size={11} c={color.sub} numberOfLines={1}>{meta}</T>
+      </View>
+      <Pressable accessibilityRole="button" onPress={onPress} style={{ minHeight: 44, minWidth: 68, paddingHorizontal: 14, borderWidth: hairline, borderColor: color.text, borderRadius: radius.input, alignItems: 'center', justifyContent: 'center' }}>
+        <T size={12} w={700}>{action}</T>
+      </Pressable>
+    </View>
   );
 }

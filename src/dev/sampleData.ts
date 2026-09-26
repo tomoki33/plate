@@ -6,6 +6,7 @@ import { addDays, dateKey, weekdayIndex } from '../domain/dates';
 import type { ExerciseLog, MealEntry, SessionRecord, Slot } from '../domain/models';
 import { bestSet, decideDayType, volumeScore } from '../domain/training';
 import { uuid } from '../lib/id';
+import { SAMPLE_PHOTO_URI } from './samplePhoto';
 import { useStore } from '../store/store';
 
 /**
@@ -37,7 +38,7 @@ function per100(code: string) {
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
-function group(date: string, at: number, slot: Slot, name: string, items: Item[], opts: { ai?: boolean; scale?: number } = {}): MealEntry[] {
+function group(date: string, at: number, slot: Slot, name: string, items: Item[], opts: { ai?: boolean; scale?: number; photo?: boolean } = {}): MealEntry[] {
   const groupId = uuid();
   return items.map((it, i) => {
     const f = per100(it.code);
@@ -45,7 +46,7 @@ function group(date: string, at: number, slot: Slot, name: string, items: Item[]
     return {
       id: uuid(), date, slot, foodId: f.id, groupId, groupName: name, name: f.name, grams: g,
       kcal: Math.round((f.kcal * g) / 100), P: round1((f.p * g) / 100), F: round1((f.f * g) / 100), C: round1((f.c * g) / 100),
-      ai: !!opts.ai, photoUri: null, inputType: opts.ai ? 'text' : 'set', createdAt: at + i,
+      ai: !!opts.ai, photoUri: opts.photo ? SAMPLE_PHOTO_URI : null, inputType: opts.photo ? 'photo' : opts.ai ? 'text' : 'set', createdAt: at + i,
     };
   });
 }
@@ -103,12 +104,18 @@ export async function insertSampleData(now = new Date()): Promise<void> {
     meals.push(...group(date, at, '朝', bn, bi, { scale }));
     meals.push(...group(date, at + 4 * 3600_000, '昼', ln, li, { scale }));
     const trained = SEED_WEEK_PLAN[weekdayIndex(d)] !== null;
-    if (trained) meals.push(...group(date, at + 9 * 3600_000, '間食', 'トレ後：プロテイン＋バナナ', [{ code: 'protein', g: 30 }, { code: '07107', g: 100 }], { scale: 1.2 }));
+    if (trained) meals.push(...group(date, at + 9 * 3600_000, '間食', 'トレーニング後：プロテイン＋バナナ', [{ code: 'protein', g: 30 }, { code: '07107', g: 100 }], { scale: 1.2 }));
     // 夜ごはんのうち1日は、文章から入れた（AI入力）ことにする
+    if (i === 2 || i === 8) {
+      // 写真で記録した昼ごはん（サムネイルの表示を確かめる）
+      meals.splice(meals.length - 1, 0, ...group(date, at + 5 * 3600_000, '昼', '鶏むね・ごはん・味噌汁', [{ code: '11220', g: 180 }, { code: '01088', g: 200 }, { code: 'miso-soup', g: 180 }], { ai: true, photo: true, scale }));
+    }
     meals.push(...group(date, at + 12 * 3600_000, '夜', i === 3 ? '鶏むね200g 米150g 味噌汁' : dn, i === 3 ? [{ code: '11220', g: 200 }, { code: '01088', g: 150 }, { code: 'miso-soup', g: 180 }] : di, { ai: i === 3, scale }));
   }
   const at0 = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8).getTime();
   meals.push(...group(today, at0, '朝', BREAKFAST[0][0], BREAKFAST[0][1], { scale: 1.2 }));
+  // 今日の昼ごはんも、写真で記録したことにする
+  meals.push(...group(today, at0 + 4 * 3600_000, '昼', '鶏むね・ごはん・味噌汁', [{ code: '11220', g: 180 }, { code: '01088', g: 200 }, { code: 'miso-soup', g: 180 }], { ai: true, photo: true }));
   await repo.insertMeals(meals);
 
   // ---- トレ（21日）：予定どおり／予定を飛ばした日／予定外の日
@@ -162,4 +169,19 @@ export async function startWithSampleData(): Promise<void> {
   useStore.getState().completeOnboarding({ sex: 'male', birthYear: 1995, heightCm: 172, activity: 1.55, goal: 'cut', pace: -0.47, weight: 71.5, goalWeight: 69 });
   await new Promise((r) => setTimeout(r, 300)); // 書き込みが終わるのを待つ
   await insertSampleData();
+}
+
+/**
+ * 開発ビルドで、起動時に自動でサンプルを入れる（.env.local に EXPO_PUBLIC_AUTO_SAMPLE=1）。
+ * 初回だけ：まだ始めていなければ、ログインとオンボーディングを飛ばして始める。
+ * すでに始めているときは、記録をサンプルに置き換える。入れたら印を残して、消したあとに勝手に戻さない。
+ */
+export async function maybeAutoSample(): Promise<boolean> {
+  if (!__DEV__ || process.env.EXPO_PUBLIC_AUTO_SAMPLE !== '1') return false;
+  const st = useStore.getState();
+  if (st.sampleInserted) return false;
+  if (!st.profile.onboarded) await startWithSampleData();
+  else await insertSampleData();
+  st.markSampleInserted();
+  return true;
 }

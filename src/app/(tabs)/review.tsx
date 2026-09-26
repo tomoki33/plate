@@ -199,7 +199,7 @@ export default function ReviewScreen() {
       <View style={{ paddingHorizontal: 20, marginTop: 14 }}>
         <SectionLabel>推定1RMの推移{limitWeeks !== null ? `（直近${limitWeeks}週）` : ''}</SectionLabel>
         {performed.length === 0 ? (
-          <T size={13} c={color.sub} style={{ paddingVertical: 14 }}>トレを記録すると、種目ごとの推移が出ます。</T>
+          <T size={13} c={color.sub} style={{ paddingVertical: 14 }}>トレーニングを記録すると、種目ごとの推移が出ます。</T>
         ) : (
           <>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingVertical: 8 }}>

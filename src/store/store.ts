@@ -88,6 +88,8 @@ interface State {
   paceAnswers: Record<string, 'accepted' | 'dismissed'>;
   /** ヘルスケア連携（体重の自動取り込み）がオンか */
   healthSync: boolean;
+  /** 開発用：サンプルを自動で入れ済みか */
+  sampleInserted: boolean;
 
   session: Session | null;
   rest: number;
@@ -130,6 +132,7 @@ interface State {
 
   // ヘルスケア連携
   setHealthSync(on: boolean): void;
+  markSampleInserted(): void;
 
   // 体重・日タイプ
   setWeight(date: string, kg: number, opts?: { source?: 'manual' | 'healthkit'; bodyFat?: number | null; silent?: boolean }): void;
@@ -205,6 +208,7 @@ export const useStore = create<State>()((set, get) => {
     lastTargets: {},
     paceAnswers: {},
     healthSync: false,
+    sampleInserted: false,
     session: null,
     rest: 0,
     restMax: 120,
@@ -247,6 +251,7 @@ export const useStore = create<State>()((set, get) => {
         lastTargets: d.lastTargets,
         paceAnswers: d.paceAnswers,
         healthSync: d.kv.health_sync === '1',
+        sampleInserted: d.kv.sample_inserted === '1',
         lastBackupAt: d.kv.last_backup_at ? Number(d.kv.last_backup_at) : null,
       });
     },
@@ -516,6 +521,11 @@ export const useStore = create<State>()((set, get) => {
       }
     },
 
+    markSampleInserted() {
+      set({ sampleInserted: true });
+      persist(repo.setKv('sample_inserted', '1'));
+    },
+
     setHealthSync(on) {
       set({ healthSync: on });
       persist(on ? repo.setKv('health_sync', '1') : repo.deleteKv('health_sync'));
@@ -586,7 +596,7 @@ export const useStore = create<State>()((set, get) => {
         const prev = lastOf(te.exerciseId) ?? { kg: te.kg, reps: te.reps };
         return [{ exerciseId: def.id, name: def.name, part: def.part, coef: def.coef, prevKg: prev.kg, prevReps: prev.reps, sets: Array.from({ length: te.sets }, () => ({ kg: prev.kg, reps: prev.reps, done: false })) }];
       });
-      set({ doneOpen: false, rest: 0, session: { templateId: tpl?.id ?? null, name: tpl?.name ?? 'フリートレ', defaultDayType: tpl?.defaultDayType ?? 'normal', cur: 0, sel: 0, startedAt: Date.now(), ex } });
+      set({ doneOpen: false, rest: 0, session: { templateId: tpl?.id ?? null, name: tpl?.name ?? 'フリートレーニング', defaultDayType: tpl?.defaultDayType ?? 'normal', cur: 0, sel: 0, startedAt: Date.now(), ex } });
     },
     cancelSession() {
       clearInterval(restTimer);

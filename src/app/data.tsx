@@ -52,7 +52,7 @@ export default function DataScreen() {
         </View>
 
         <View style={{ marginTop: 16 }}><SectionLabel>書き出し</SectionLabel></View>
-        <ListRow title="CSVで書き出す" meta="体重・食事・トレの記録（無料でも使えます）" right={<T size={13} w={700}>書き出す</T>} minHeight={60} onPress={() => run(async () => ((await shareCsv()).ok ? null : '書き出せませんでした。'))} />
+        <ListRow title="CSVで書き出す" meta="体重・食事・トレーニングの記録（無料でも使えます）" right={<T size={13} w={700}>書き出す</T>} minHeight={60} onPress={() => run(async () => ((await shareCsv()).ok ? null : '書き出せませんでした。'))} />
 
         <View style={{ marginTop: 22 }}><SectionLabel>バックアップ</SectionLabel></View>
         {!cloud ? (
@@ -83,7 +83,7 @@ export default function DataScreen() {
         {msg && <T size={12} c={color.brandText} style={{ marginTop: 8 }}>{msg}</T>}
 
         <View style={{ marginTop: 22 }}><SectionLabel>記録の削除</SectionLabel></View>
-        <T size={12} c={color.sub} style={{ marginTop: 6, lineHeight: 18 }}>体重・食事・トレの記録とマイ食品を、この端末からすべて消します。バックアップは、別に残ります。体重などのデータは、大切な個人情報として扱います。</T>
+        <T size={12} c={color.sub} style={{ marginTop: 6, lineHeight: 18 }}>体重・食事・トレーニングの記録とマイ食品を、この端末からすべて消します。バックアップは、別に残ります。体重などのデータは、大切な個人情報として扱います。</T>
         <View style={{ marginTop: 8 }}>
           <OutlineButton
             label={confirm === 'erase' ? 'もう一度押すと、すべて削除します' : 'すべての記録を削除'}

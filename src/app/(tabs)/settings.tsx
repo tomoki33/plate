@@ -181,7 +181,7 @@ export default function SettingsScreen() {
         </Card>
         <T size={11} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 6 }}>基本情報を変えると、維持カロリーの推定は式から出し直します。</T>
 
-        {label('トレのテンプレート')}
+        {label('トレーニングのテンプレート')}
         <Card>
           {w.templates.map((t) => (
             <CardRow key={t.id} title={t.name} meta={`${t.exercises.length}種目・日タイプ ${DAY_TYPE_JP[t.defaultDayType]}`} right={<T size={12} c={color.sub}>編集 ›</T>} onPress={() => router.push({ pathname: '/template/[id]', params: { id: t.id } })} />

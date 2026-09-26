@@ -2,7 +2,7 @@ import { BarlowSemiCondensed_500Medium, BarlowSemiCondensed_600SemiBold, BarlowS
 import { NotoSansJP_400Regular, NotoSansJP_500Medium, NotoSansJP_700Bold, NotoSansJP_900Black } from '@expo-google-fonts/noto-sans-jp';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
 import { LogBox, Platform, useColorScheme, View } from 'react-native';
@@ -15,6 +15,7 @@ import { T, applyScheme, color, lightPalette } from '@/design-system';
 import { checkPaid, identifyBilling, initBilling } from '../services/billing';
 import { readBodyComposition } from '../services/healthkit';
 import { currentSession, onAccountChange, toAccount } from '../services/supabase';
+import { maybeAutoSample } from '../dev/sampleData';
 import { runBackup } from '../store/backupRunner';
 import { useStore } from '../store/store';
 
@@ -55,6 +56,7 @@ function ErrorView({ message }: { message: string }) {
 }
 
 function App() {
+  const router = useRouter();
   // 配色（ライト／ダーク）は端末の設定に従う。切り替わったら画面を作り直して、色を読み直す
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   applyScheme(scheme);
@@ -130,6 +132,12 @@ function App() {
     }
     prevAccount.current = id;
   }, [authChecked, account, lastBackupAt, showToast]);
+
+  // 開発用：サンプルの自動投入（EXPO_PUBLIC_AUTO_SAMPLE=1 のときだけ）
+  useEffect(() => {
+    if (authChecked) void maybeAutoSample().then((inserted) => inserted && router.replace('/'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authChecked]);
 
   // ヘルスケア連携がオンなら、起動時に体重を取り込む（手入力の日は上書きしない）
   useEffect(() => {

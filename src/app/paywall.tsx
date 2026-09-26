@@ -13,7 +13,7 @@ const TERMS_URL = process.env.EXPO_PUBLIC_TERMS_URL;
 const PRIVACY_URL = process.env.EXPO_PUBLIC_PRIVACY_URL;
 
 const ROWS: [string, string, string][] = [
-  ['トレ記録・テンプレート', '無制限', '無制限'],
+  ['トレーニング記録・テンプレート', '無制限', '無制限'],
   ['食事記録（マイ食品・成分表検索）', '無制限', '無制限'],
   ['目標', '固定のPFC目標のみ', '日タイプ連動・週内の再配分'],
   ['AIテキスト入力', `1日${AI_LIMIT_FREE}回`, `1日${AI_LIMIT_PAID}回`],

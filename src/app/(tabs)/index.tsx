@@ -110,17 +110,17 @@ export default function TodayScreen() {
       lineR = `目標変更 C${sign(dC)}${Math.abs(dC)}g`;
       lineC = color.brandText;
     } else if (w.today.type === 'off') {
-      lineL = 'トレなし';
+      lineL = 'トレーニングなし';
       lineR = linked ? 'Pは維持、Cを減らす' : '';
     } else {
       lineL = `${templateName(w.templates, w.todayTemplateId)}の予定`;
-      lineR = 'トレ前';
+      lineR = 'トレーニング前';
     }
   } else if (past) {
     lineL = viewEaten.kcal ? '記録済み' : '記録なし';
     lineR = viewEaten.kcal ? `目標より ${sign(viewEaten.kcal - dd.kcal)}${fmt(Math.abs(viewEaten.kcal - dd.kcal))}kcal` : '下から追加できます';
   } else {
-    lineL = dd.type === 'off' ? 'トレなし' : `予定：${templateName(w.templates, w.weekPlan[vd])}`;
+    lineL = dd.type === 'off' ? 'トレーニングなし' : `予定：${templateName(w.templates, w.weekPlan[vd])}`;
     lineR = linked ? (dd.type === 'off' ? 'Pは維持、Cを減らす' : '予定を変えたら残りの日に配り直し') : '';
   }
 
@@ -214,7 +214,7 @@ export default function TodayScreen() {
 
         {!linked && isToday && (
           <Pressable accessibilityRole="button" onPress={() => router.push('/paywall')} style={{ marginHorizontal: 22, minHeight: 44, justifyContent: 'center', borderBottomWidth: hairline, borderBottomColor: color.line }}>
-            <T size={12} c={color.sub}>目標は毎日同じです。トレに合わせて変わる「日タイプ連動」は有料プランで使えます。 <T size={12} w={700}>プランを見る ›</T></T>
+            <T size={12} c={color.sub}>目標は毎日同じです。トレーニングに合わせて変わる「日タイプ連動」は有料プランで使えます。 <T size={12} w={700}>プランを見る ›</T></T>
           </Pressable>
         )}
 
@@ -239,10 +239,10 @@ export default function TodayScreen() {
               </View>
             </Pressable>
 
-            {/* その日のトレ（記録があれば） */}
+            {/* その日のトレーニング（記録があれば） */}
             {!isToday && viewWorkouts.map((x) => (
               <View key={x.id} style={{ marginHorizontal: 22, minHeight: 44, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: hairline, borderBottomColor: color.line }}>
-                <T size={13} c={color.badgeFg}>トレ：{x.name}</T>
+                <T size={13} c={color.badgeFg}>トレーニング：{x.name}</T>
                 <T size={12} c={color.sub}>{x.doneSets}セット</T>
               </View>
             ))}

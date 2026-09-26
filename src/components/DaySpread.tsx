@@ -25,7 +25,7 @@ export function DaySpreadSection({ coef, kcal, linked, onCoef }: { coef: Coef; k
   return (
     <View>
       <T size={11} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 4 }}>日ごとの食べる量</T>
-      <T size={12} c={color.badgeFg} style={{ paddingHorizontal: 20, paddingBottom: 8, lineHeight: 19 }}>週の合計はそのままで、トレの日に多く、休みの日に少なく配ります。</T>
+      <T size={12} c={color.badgeFg} style={{ paddingHorizontal: 20, paddingBottom: 8, lineHeight: 19 }}>週の合計はそのままで、トレーニングの日に多く、休みの日に少なく配ります。</T>
       <Card style={{ paddingTop: 12, paddingHorizontal: 12, paddingBottom: 4 }}>
         <Segmented
           value={(preset ?? '') as SpreadPreset}

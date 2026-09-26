@@ -383,7 +383,7 @@ export async function wipeUserData() {
   await db.delete(s.paceSuggestion);
   await db.delete(s.mealSet);
   // 無料体験の開始日と課金状態は、データ削除では消さない（削除で体験が延びないように）
-  await db.delete(s.kv).where(notInArray(s.kv.key, ['trial_started_at', 'paid']));
+  await db.delete(s.kv).where(notInArray(s.kv.key, ['trial_started_at', 'paid', 'sample_inserted']));
   await db.delete(s.food).where(eq(s.food.source, '自作'));
   await db.delete(s.food).where(eq(s.food.source, 'AI'));
   await db.delete(s.profile);

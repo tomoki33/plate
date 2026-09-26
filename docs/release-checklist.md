@@ -11,7 +11,7 @@
 
 ## B. 外部サービス（アカウントが必要）
 1. **Supabase**（無料枠で可）
-   - プロジェクト作成 → SQL Editor で `supabase/migrations/0001_backups.sql` を実行
+   - プロジェクト作成 → SQL Editor で `supabase/migrations/0001_backups.sql` と `0002_meal_photos.sql`（写真の保管領域）を実行
    - Authentication → Providers：Apple・Email（OTP）を有効化。Google を使うなら Google も（使わないなら `AuthButtons` から外す）
    - `supabase functions deploy estimate-meal` / `delete-account`
    - `supabase secrets set ANTHROPIC_API_KEY=...`
@@ -65,7 +65,8 @@
 - [ ] 下端／ノッチの余白（ホームバーとタブバー、シート）
 - [ ] ダークモード切り替え（設定 → 端末の外観）
 - [ ] Apple ログイン／メールコード／ログアウト／アカウント削除
-- [ ] バックアップ → アプリ削除 → 入れ直して復元
+- [ ] バックアップ → アプリ削除 → 入れ直して復元（**写真も戻ること**。Supabase の Storage に `meal-photos/<user_id>/` ができる）
+- [ ] アカウント削除で、Storage の写真も消えること
 - [ ] ヘルスケア：許可 → 体重の取り込み（重複しない）
 - [ ] CSV の書き出し（共有シート）
 - [ ] 購読：サンドボックスで購入・復元・体験→有料の切り替え、`plate_pro` の反映

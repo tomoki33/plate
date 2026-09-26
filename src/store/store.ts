@@ -1,3 +1,4 @@
+import { removeAllPhotos } from '../services/photos';
 import { create } from 'zustand';
 import * as repo from '../db/repo';
 import { seedIfNeeded } from '../db/seed';
@@ -791,6 +792,7 @@ export const useStore = create<State>()((set, get) => {
     async eraseAllData() {
       clearInterval(restTimer);
       await repo.wipeUserData();
+      removeAllPhotos();
       await seedIfNeeded();
       set({ session: null, rest: 0, doneOpen: false, toast: null });
       await get().reload();

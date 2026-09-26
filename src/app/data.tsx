@@ -67,8 +67,8 @@ export default function DataScreen() {
         ) : (
           <View style={{ marginTop: 8, gap: 8 }}>
             <T size={12} c={color.sub}>{account?.email ?? 'ログイン中'}</T>
-            <T size={12} c={color.sub}>最後のバックアップ：{lastBackup ? when(lastBackup) : 'まだありません'}</T>
-            <PrimaryButton label="いまバックアップする" disabled={busy} onPress={() => run(async () => { const r = await backupNow(); await refresh(); return r.ok ? 'バックアップしました。' : (r.error ?? 'できませんでした。'); })} />
+            <T size={12} c={color.sub}>最後のバックアップ（記録と写真）：{lastBackup ? when(lastBackup) : 'まだありません'}</T>
+            <PrimaryButton label="いまバックアップする" disabled={busy} onPress={() => run(async () => { const r = await backupNow(); await refresh(); return r.ok ? (r.error ?? 'バックアップしました。（写真も含みます）') : (r.error ?? 'できませんでした。'); })} />
             <OutlineButton
               label={confirm === 'restore' ? 'もう一度押すと、この端末の記録をバックアップに置き換えます' : 'バックアップから復元する'}
               onPress={() => {

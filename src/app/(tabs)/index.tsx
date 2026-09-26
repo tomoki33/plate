@@ -8,7 +8,7 @@ import { EditMealSheet } from '../../components/EditMealSheet';
 import { MealFlow, PhotoThumb } from '../../components/MealFlow';
 import { WeightSheet } from '../../components/WeightSheet';
 import { useNow } from '../../components/useNow';
-import { pickPhoto, type PickedPhoto } from '../../services/photos';
+import { pickPhoto, resolvePhotoUri, type PickedPhoto } from '../../services/photos';
 import { addDays, dateKey, formatJpDate, slotOf } from '../../domain/dates';
 import { DAY_LABELS, DAY_TYPE_JP, type DayType, type Macro } from '../../domain/types';
 import { groupMeals, sumMeals, templateName, weightAverage7, useWeek, type MealGroup } from '../../store/selectors';
@@ -255,7 +255,7 @@ export default function TodayScreen() {
                 <View key={g.groupId} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', borderBottomWidth: hairline, borderBottomColor: color.line }}>
                   <Pressable accessibilityRole="button" accessibilityLabel={`${g.name}を編集`} onPress={() => setEditing(g)} style={{ flex: 1, minHeight: 48, flexDirection: 'row', alignItems: 'center' }}>
                     <T size={12} c={color.sub} style={{ width: 36 }}>{g.slot}</T>
-                    {g.photoUri ? <View style={{ marginRight: 8 }}><PhotoThumb photo={{ uri: g.photoUri }} size={28} /></View> : null}
+                    {g.photoUri ? <View style={{ marginRight: 8 }}><PhotoThumb photo={{ uri: resolvePhotoUri(g.photoUri) }} size={28} /></View> : null}
                     <T size={13.5} style={{ flex: 1 }} numberOfLines={1}>{g.name}</T>
                     {g.ai && !g.photoUri && <Badge high>AI</Badge>}
                     <N size={15} w={500} style={{ marginLeft: 8, minWidth: 40, textAlign: 'right' }}>{fmt(g.kcal)}</N>

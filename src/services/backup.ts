@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db, sqlite } from '../db/client';
 import * as s from '../db/schema';
+import { downloadPhotos, uploadPhotos } from './photoSync';
 import { supabase } from './supabase';
 
 /**
@@ -50,7 +51,14 @@ export async function backupNow(): Promise<{ ok: boolean; error?: string; at?: n
   if (!u.user) return { ok: false, error: 'ログインしてください' };
   const payload = await buildPayload();
   const { error } = await c.from('backups').upsert({ user_id: u.user.id, payload, updated_at: new Date().toISOString() });
-  return error ? { ok: false, error: error.message } : { ok: true, at: payload.createdAt };
+  if (error) return { ok: false, error: error.message };
+  // 写真は、記録のバックアップとは別に上げる（失敗しても、記録のバックアップは成功のまま。次回に続きから上げる）
+  try {
+    await uploadPhotos(u.user.id);
+  } catch (e) {
+    return { ok: true, at: payload.createdAt, error: `写真のバックアップは未完了です（${e instanceof Error ? e.message : String(e)}）` };
+  }
+  return { ok: true, at: payload.createdAt };
 }
 
 export async function latestBackupAt(): Promise<number | null> {
@@ -71,7 +79,9 @@ export async function restoreLatest(): Promise<{ ok: boolean; error?: string }> 
   const { data, error } = await c.from('backups').select('payload').eq('user_id', u.user.id).maybeSingle();
   if (error) return { ok: false, error: error.message };
   if (!data) return { ok: false, error: 'バックアップがありません' };
-  return applyPayload(data.payload as BackupPayload);
+  const r = await applyPayload(data.payload as BackupPayload);
+  if (r.ok) await downloadPhotos(u.user.id).catch(() => 0);
+  return r;
 }
 
 export async function applyPayload(p: BackupPayload): Promise<{ ok: boolean; error?: string }> {

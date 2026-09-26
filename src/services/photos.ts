@@ -43,6 +43,17 @@ function toResult(r: ImagePicker.ImagePickerResult): PickResult {
   return { photo: { uri: a.uri, base64: a.base64 ?? undefined } };
 }
 
+export const PHOTO_DIR = 'photos';
+
+/** meal_entry.photo_uri（相対パス／古い形式の絶対パス／Web の data URL）を、表示できる URI にする */
+export function resolvePhotoUri(stored: string): string {
+  if (Platform.OS === 'web' || !stored.startsWith(`${PHOTO_DIR}/`)) return stored;
+  return new File(Paths.document, stored).uri;
+}
+
+/** 端末にある写真のファイル名（バックアップの対象）。相対パス以外は対象外 */
+export const photoFileName = (stored: string | null): string | null => (stored && stored.startsWith(`${PHOTO_DIR}/`) ? stored.slice(PHOTO_DIR.length + 1) : null);
+
 /**
  * 写真をアプリの保存領域に移す（一時ファイルは消えるので）。戻り値を meal_entry.photo_uri に入れる。
  * Web（確認用）は、ファイルを持てないので data URL のまま保存する。
@@ -51,12 +62,24 @@ export async function persistPhoto(photo: PickedPhoto): Promise<string | null> {
   if (photo.sample) return null;
   try {
     if (Platform.OS === 'web') return photo.base64 ? `data:image/jpeg;base64,${photo.base64}` : photo.uri;
-    const dir = new Directory(Paths.document, 'photos');
+    const dir = new Directory(Paths.document, PHOTO_DIR);
     if (!dir.exists) dir.create();
-    const dest = new File(dir, `${uuid()}.jpg`);
-    new File(photo.uri).copy(dest);
-    return dest.uri;
+    const name = `${uuid()}.jpg`;
+    new File(photo.uri).copy(new File(dir, name));
+    // 相対パスで持つ（iOS はアプリの保存先のパスが、更新や復元で変わることがあるため）
+    return `${PHOTO_DIR}/${name}`;
   } catch {
     return photo.uri;
+  }
+}
+
+/** 端末の写真ファイルをすべて消す（「すべての記録を削除」用） */
+export function removeAllPhotos(): void {
+  if (Platform.OS === 'web') return;
+  try {
+    const dir = new Directory(Paths.document, PHOTO_DIR);
+    if (dir.exists) dir.delete();
+  } catch {
+    /* 消せなくても、記録の削除は続ける */
   }
 }

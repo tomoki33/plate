@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, isNull, notInArray, or, sql } from 'drizzle-orm';
-import { expandQuery, POPULAR_FOODS } from '../domain/foodSearch';
+import { expandQuery, POPULAR_FOODS, rankFoods } from '../domain/foodSearch';
 import type { Exercise, FoodItem, MealEntry, MealSet, ProfileData, SessionRecord, WorkoutTemplate } from '../domain/models';
 import type { DayType } from '../domain/types';
 import { bestSet } from '../domain/training';
@@ -266,8 +266,9 @@ export async function searchFoodsDb(query: string, limit = 30): Promise<FoodItem
     .from(s.food)
     .where(and(alive(s.food), ...conds))
     .orderBy(sql`CASE WHEN ${s.food.source} = '自作' THEN 0 ELSE 1 END`, popularCase, sql`length(${s.food.name})`)
-    .limit(limit);
-  return rows.map(toFood);
+    .limit(400);
+  // 関連の高い順に並べ替える（偶然の一致は落とす）
+  return rankFoods(q, rows.map(toFood), limit);
 }
 
 export async function getFoodsByIds(ids: string[]): Promise<FoodItem[]> {

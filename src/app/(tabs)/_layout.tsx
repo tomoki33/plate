@@ -19,7 +19,7 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: color.text,
         tabBarInactiveTintColor: color.sub,
-        tabBarStyle: { backgroundColor: '#fff', borderTopWidth: hairline, borderTopColor: color.line, height: 48 + insets.bottom, elevation: 0, shadowOpacity: 0 },
+        tabBarStyle: { backgroundColor: color.surface, borderTopWidth: hairline, borderTopColor: color.line, height: 48 + insets.bottom, elevation: 0, shadowOpacity: 0 },
         tabBarItemStyle: { height: 48, paddingVertical: 4 },
         tabBarLabelStyle: { fontSize: 10.5, fontFamily: font.jp500 },
       }}

@@ -177,7 +177,7 @@ export default function ReviewScreen() {
               <Chip key={e.id} label={e.name} selected={chartEx?.id === e.id} onPress={() => setExId(e.id)} />
             ))}
           </ScrollView>
-          <View style={{ backgroundColor: '#fff', borderRadius: radius.card, borderWidth: hairline, borderColor: color.line, padding: 10, overflow: 'hidden' }}>
+          <View style={{ backgroundColor: color.surface, borderRadius: radius.card, borderWidth: hairline, borderColor: color.line, padding: 10, overflow: 'hidden' }}>
             {series.length < 2 ? (
               <T size={13} c={color.sub} style={{ padding: 12 }}>{series.length === 1 ? `いまは ${series[0].e1rm.toFixed(1)}kg。2回以上記録すると、線で見えます。` : 'この期間の記録がありません。'}</T>
             ) : (
@@ -214,7 +214,7 @@ export default function ReviewScreen() {
       <View style={{ marginTop: 8 }}>
         <Segmented value={range} onChange={setRange} options={[{ value: 14 as const, label: '2週' }, { value: 56 as const, label: '8週' }, { value: 365 as const, label: '1年' }]} />
       </View>
-      <View style={{ marginTop: 8, backgroundColor: '#fff', borderRadius: radius.card, borderWidth: hairline, borderColor: color.line, padding: 10, overflow: 'hidden' }}>
+      <View style={{ marginTop: 8, backgroundColor: color.surface, borderRadius: radius.card, borderWidth: hairline, borderColor: color.line, padding: 10, overflow: 'hidden' }}>
         {wc.count < 2 ? (
           <T size={13} c={color.sub} style={{ padding: 12 }}>{wc.count === 1 ? '体重を2日以上記録すると、推移が線で出ます。' : '体重を記録すると、ここに出ます。'}</T>
         ) : (

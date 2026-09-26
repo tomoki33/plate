@@ -27,6 +27,9 @@ export const SEED_EXERCISES: SeedExercise[] = [
     ['calf_raise', 'カーフレイズ'],
     ['hip_abduction', 'ヒップアブダクション'],
     ['step_up', 'ステップアップ'],
+    ['sumo_squat', 'ワイドスタンススクワット'],
+    ['good_morning', 'グッドモーニング'],
+    ['hip_adduction', 'ヒップアダクション'],
   ]),
   ...ex('背中', [
     ['deadlift', 'デッドリフト'],
@@ -43,6 +46,9 @@ export const SEED_EXERCISES: SeedExercise[] = [
     ['shrug', 'シュラッグ'],
     ['back_extension', 'バックエクステンション'],
     ['rack_pull', 'ラックプル'],
+    ['chin', 'ナローグリップ懸垂'],
+    ['inverted_row', 'インバーテッドロウ'],
+    ['db_pullover', 'ダンベルプルオーバー'],
   ]),
   ...ex('胸', [
     ['bench', 'ベンチプレス'],
@@ -57,6 +63,7 @@ export const SEED_EXERCISES: SeedExercise[] = [
     ['dips', 'ディップス'],
     ['pushup', 'プッシュアップ'],
     ['smith_bench', 'スミスマシンベンチプレス'],
+    ['cable_fly', 'ケーブルフライ'],
   ]),
   ...ex('肩', [
     ['shoulder_press', 'ショルダープレス'],
@@ -69,6 +76,7 @@ export const SEED_EXERCISES: SeedExercise[] = [
     ['rear_raise', 'リアレイズ'],
     ['upright_row', 'アップライトロウ'],
     ['reverse_pec', 'リアデルトフライ（マシン）'],
+    ['db_shoulder', 'ダンベルショルダープレス'],
   ]),
   ...ex('腕', [
     ['bb_curl', 'バーベルカール'],
@@ -83,6 +91,8 @@ export const SEED_EXERCISES: SeedExercise[] = [
     ['close_bench', 'ナローベンチプレス'],
     ['kickback', 'ダンベルキックバック'],
     ['wrist_curl', 'リストカール'],
+    ['reverse_curl', 'リバースカール'],
+    ['overhead_ext', 'オーバーヘッドエクステンション'],
   ]),
   ...ex('腹', [
     ['crunch', 'クランチ'],
@@ -93,6 +103,7 @@ export const SEED_EXERCISES: SeedExercise[] = [
     ['russian_twist', 'ロシアンツイスト'],
     ['side_bend', 'サイドベンド'],
     ['plank', 'プランク'],
+    ['v_up', 'Vアップ'],
   ]),
 ];
 

@@ -10,7 +10,7 @@ export function ToastHost() {
   return (
     <View pointerEvents="box-none" style={{ position: 'absolute', left: 16, right: 16, bottom: 96, zIndex: 100 }}>
       <View style={{ paddingVertical: 12, paddingHorizontal: 14, backgroundColor: color.text, borderRadius: radius.button, flexDirection: 'row', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
-        <T size={13} c="#fff" style={{ flex: 1 }}>
+        <T size={13} c={color.onText} style={{ flex: 1 }}>
           {toast.text}
         </T>
         {toast.undo && (
@@ -22,7 +22,7 @@ export function ToastHost() {
               hide();
             }}
           >
-            <T size={13} w={700} c={color.brandPale2}>
+            <T size={13} w={700} c={color.brand}>
               取消
             </T>
           </Pressable>

@@ -9,7 +9,7 @@ export function Segmented<V extends string | number>({ options, value, onChange 
   return (
     <View style={{ flexDirection: 'row', backgroundColor: color.track, borderRadius: radius.button, padding: 3 }}>
       {options.map((o) => (
-        <Pressable key={String(o.value)} accessibilityRole="tab" accessibilityState={{ selected: o.value === value }} onPress={() => onChange(o.value)} style={{ flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 6, backgroundColor: o.value === value ? '#fff' : 'transparent' }}>
+        <Pressable key={String(o.value)} accessibilityRole="tab" accessibilityState={{ selected: o.value === value }} onPress={() => onChange(o.value)} style={{ flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 6, backgroundColor: o.value === value ? color.surface : 'transparent' }}>
           <T size={13} w={o.value === value ? 700 : 400}>{o.label}</T>
         </Pressable>
       ))}
@@ -52,8 +52,8 @@ export function ListRow({ title, meta, right, onPress, dot, style, minHeight = 5
 /** 選択肢（チップ） */
 export function Chip({ label, selected, onPress }: { label: string; selected?: boolean; onPress: () => void }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityState={{ selected: !!selected }} onPress={onPress} style={{ minHeight: 44, paddingHorizontal: 14, borderRadius: radius.button, borderWidth: 1, borderColor: selected ? color.text : color.lineStrong, backgroundColor: selected ? color.text : '#fff', alignItems: 'center', justifyContent: 'center' }}>
-      <T size={13} w={selected ? 700 : 400} c={selected ? '#fff' : color.text}>{label}</T>
+    <Pressable accessibilityRole="button" accessibilityState={{ selected: !!selected }} onPress={onPress} style={{ minHeight: 44, paddingHorizontal: 14, borderRadius: radius.button, borderWidth: 1, borderColor: selected ? color.text : color.lineStrong, backgroundColor: selected ? color.text : color.surface, alignItems: 'center', justifyContent: 'center' }}>
+      <T size={13} w={selected ? 700 : 400} c={selected ? color.onText : color.text}>{label}</T>
     </Pressable>
   );
 }
@@ -67,7 +67,7 @@ export function Field(props: TextInputProps & { label?: string }) {
       <TextInput
         placeholderTextColor={color.faint}
         {...rest}
-        style={[{ minHeight: 44, borderWidth: 1, borderColor: color.lineStrong, borderRadius: radius.input, paddingHorizontal: 12, fontFamily: font.jp, fontSize: 14, color: color.text, backgroundColor: '#fff' }, style]}
+        style={[{ minHeight: 44, borderWidth: 1, borderColor: color.lineStrong, borderRadius: radius.input, paddingHorizontal: 12, fontFamily: font.jp, fontSize: 14, color: color.text, backgroundColor: color.surface }, style]}
       />
     </View>
   );

@@ -12,7 +12,8 @@ import { groupMeals, sumMeals, templateName, weightAverage7, useWeek } from '../
 import { useStore } from '../../store/store';
 
 const fmt = (n: number) => Math.round(n).toLocaleString();
-const TYPE_COLOR: Record<DayType, string> = { high: color.brand, normal: color.brandPale2, off: color.off };
+/** 日タイプの色（配色が変わっても読み直せるよう関数にする） */
+const typeColor = (t: DayType): string => (t === 'high' ? color.brand : t === 'normal' ? color.brandPale2 : color.off);
 const MACROS: [string, Macro, string][] = [
   ['P たんぱく質', 'P', color.P],
   ['F 脂質', 'F', color.F],
@@ -128,9 +129,9 @@ export default function TodayScreen() {
               accessibilityRole="button"
               accessibilityLabel={`${DAY_LABELS[i]}曜日を表示`}
               onPress={() => setViewDay(i)}
-              style={{ flex: 1, height: 56, borderRadius: radius.button, backgroundColor: i === vd ? '#fff' : 'transparent', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 6 }}
+              style={{ flex: 1, height: 56, borderRadius: radius.button, backgroundColor: i === vd ? color.surface : 'transparent', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 6 }}
             >
-              <View style={{ width: 18, height: Math.round((d.kcal / maxK) * 34), backgroundColor: TYPE_COLOR[d.type], borderRadius: radius.bar }} />
+              <View style={{ width: 18, height: Math.round((d.kcal / maxK) * 34), backgroundColor: typeColor(d.type), borderRadius: radius.bar }} />
               <T size={11} w={i === vd ? 700 : 400} c={i === vd ? color.text : i === w.ti ? color.brandText : color.sub} style={{ marginTop: 4 }}>
                 {DAY_LABELS[i]}
               </T>

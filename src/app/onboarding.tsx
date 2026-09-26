@@ -71,7 +71,7 @@ export default function Onboarding() {
         </>
       )}
 
-      <View style={{ marginTop: 24, padding: 16, borderRadius: radius.card, backgroundColor: '#fff', borderWidth: hairline, borderColor: color.line }}>
+      <View style={{ marginTop: 24, padding: 16, borderRadius: radius.card, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line }}>
         <T size={11} c={color.sub}>週の目安</T>
         <N size={40} w={600} style={{ lineHeight: 44 }}>{fmt(p.week)}<T size={13} c={color.sub}> kcal / 週</T></N>
         <T size={12} c={color.sub} style={{ marginTop: 4 }}>

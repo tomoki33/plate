@@ -4,13 +4,13 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
-import { LogBox, Platform, View } from 'react-native';
+import { LogBox, Platform, useColorScheme, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import migrations from '../../drizzle/migrations';
 import { initDb } from '../db/client';
 import { runMigrations } from '../db/migrate';
 import { ToastHost } from '../components/Toast';
-import { T, color } from '@/design-system';
+import { T, applyScheme, color } from '@/design-system';
 import { checkPaid, initBilling } from '../services/billing';
 import { useStore } from '../store/store';
 
@@ -48,6 +48,9 @@ function ErrorView({ message }: { message: string }) {
 }
 
 function App() {
+  // 配色（ライト／ダーク）は端末の設定に従う。切り替わったら画面を作り直して、色を読み直す
+  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  applyScheme(scheme);
   const [fontsLoaded] = useFonts({
     NotoSansJP_400Regular,
     NotoSansJP_500Medium,
@@ -81,8 +84,8 @@ function App() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" />
-      <View style={{ flex: 1, backgroundColor: color.bg }}>
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+      <View key={scheme} style={{ flex: 1, backgroundColor: color.bg }}>
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.bg } }}>
           <Stack.Protected guard={onboarded}>
             <Stack.Screen name="(tabs)" />

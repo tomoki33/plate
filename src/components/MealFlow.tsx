@@ -192,12 +192,12 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, slot
               </View>
               <View style={{ flexDirection: 'row', gap: 8, justifyContent: 'center', marginTop: 12, flexWrap: 'wrap' }}>
                 {[50, 100, 150, 200].map((g) => (
-                  <Pressable key={g} accessibilityRole="button" onPress={() => setG(g)} style={{ minWidth: 60, height: 44, borderRadius: radius.button, borderWidth: 1, borderColor: color.lineStrong, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
+                  <Pressable key={g} accessibilityRole="button" onPress={() => setG(g)} style={{ minWidth: 60, height: 44, borderRadius: radius.button, borderWidth: 1, borderColor: color.lineStrong, alignItems: 'center', justifyContent: 'center', backgroundColor: color.surface }}>
                     <N size={15} w={500}>{g}g</N>
                   </Pressable>
                 ))}
                 {gram.food.unitG ? (
-                  <Pressable accessibilityRole="button" onPress={() => setG(gram.g + gram.food.unitG!)} style={{ minWidth: 60, height: 44, paddingHorizontal: 10, borderRadius: radius.button, borderWidth: 1, borderColor: color.lineStrong, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
+                  <Pressable accessibilityRole="button" onPress={() => setG(gram.g + gram.food.unitG!)} style={{ minWidth: 60, height: 44, paddingHorizontal: 10, borderRadius: radius.button, borderWidth: 1, borderColor: color.lineStrong, alignItems: 'center', justifyContent: 'center', backgroundColor: color.surface }}>
                     <T size={13}>＋1個（{gram.food.unitG}g）</T>
                   </Pressable>
                 ) : null}
@@ -226,7 +226,7 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, slot
                 placeholder="例：鶏むね200g 米150g 味噌汁"
                 placeholderTextColor={color.faint}
                 multiline
-                style={{ minHeight: 96, textAlignVertical: 'top', borderWidth: 1, borderColor: color.lineStrong, borderRadius: radius.input, padding: 12, fontFamily: font.jp, fontSize: 14, color: color.text, backgroundColor: '#fff' }}
+                style={{ minHeight: 96, textAlignVertical: 'top', borderWidth: 1, borderColor: color.lineStrong, borderRadius: radius.input, padding: 12, fontFamily: font.jp, fontSize: 14, color: color.text, backgroundColor: color.surface }}
               />
               <T size={12} c={color.sub} style={{ marginTop: 8 }}>今日あと{aiLeft}回（1日{aiLimit}回まで）。推定のあと、確認画面で直せます。</T>
               {aiLeft === 0 && (
@@ -353,8 +353,8 @@ function ManualEntry({ onBack, onAdd }: { onBack: () => void; onAdd: (f: { name:
       </View>
       <Field label={`食べた量（g）※空欄なら ${baseG}g`} value={eat} onChangeText={setEat} keyboardType="decimal-pad" />
       <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: save }} onPress={() => setSave(!save)} style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <View style={{ width: 22, height: 22, borderRadius: 5, borderWidth: 1, borderColor: color.lineStrong, backgroundColor: save ? color.text : '#fff', alignItems: 'center', justifyContent: 'center' }}>
-          {save && <T size={13} w={700} c="#fff">✓</T>}
+        <View style={{ width: 22, height: 22, borderRadius: 5, borderWidth: 1, borderColor: color.lineStrong, backgroundColor: save ? color.text : color.surface, alignItems: 'center', justifyContent: 'center' }}>
+          {save && <T size={13} w={700} c={color.onText}>✓</T>}
         </View>
         <T size={13}>マイ食品に登録する</T>
       </Pressable>

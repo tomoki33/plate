@@ -42,7 +42,7 @@ export default function TrainingScreen() {
       <ScrollView contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: 40, paddingHorizontal: 22 }}>
         <T size={22} w={900}>トレ</T>
 
-        <View style={{ marginTop: 16, padding: 16, borderRadius: radius.card, backgroundColor: '#fff', borderWidth: hairline, borderColor: color.line }}>
+        <View style={{ marginTop: 16, padding: 16, borderRadius: radius.card, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line }}>
           <T size={11} c={color.sub}>今日の予定</T>
           {w.todayWorkout ? (
             <View style={{ marginTop: 8, gap: 10 }}>
@@ -192,8 +192,8 @@ function Recording({ insetsTop }: { insetsTop: number }) {
             const all = e.sets.every((x) => x.done);
             const on = i === ses.cur;
             return (
-              <Pressable key={`${e.exerciseId}-${i}`} accessibilityRole="button" onPress={() => s.selectExercise(i)} style={{ minHeight: 44, paddingHorizontal: 14, borderRadius: radius.button, borderWidth: 1, borderColor: on ? color.text : color.line, backgroundColor: on ? color.text : '#fff', alignItems: 'center', justifyContent: 'center' }}>
-                <T size={13} w={on ? 700 : 400} c={on ? '#fff' : all ? color.sub : color.text}>{(all ? '✓ ' : '') + e.name}</T>
+              <Pressable key={`${e.exerciseId}-${i}`} accessibilityRole="button" onPress={() => s.selectExercise(i)} style={{ minHeight: 44, paddingHorizontal: 14, borderRadius: radius.button, borderWidth: 1, borderColor: on ? color.text : color.line, backgroundColor: on ? color.text : color.surface, alignItems: 'center', justifyContent: 'center' }}>
+                <T size={13} w={on ? 700 : 400} c={on ? color.onText : all ? color.sub : color.text}>{(all ? '✓ ' : '') + e.name}</T>
               </Pressable>
             );
           })}
@@ -219,12 +219,12 @@ function Recording({ insetsTop }: { insetsTop: number }) {
                 const touched = st.done || st.kg !== ex.prevKg || st.reps !== ex.prevReps;
                 const vc = touched ? color.text : color.faint;
                 return (
-                  <Pressable key={i} accessibilityRole="button" onPress={() => s.selectSet(i)} style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, backgroundColor: i === ses.sel ? color.bg : '#fff', borderTopWidth: i === ses.sel ? 1 : hairline, borderTopColor: i === ses.sel ? color.lineStrong : color.line, borderWidth: i === ses.sel ? 1 : 0, borderColor: color.lineStrong, borderRadius: i === ses.sel ? radius.input : 0 }}>
+                  <Pressable key={i} accessibilityRole="button" onPress={() => s.selectSet(i)} style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, backgroundColor: i === ses.sel ? color.bg : color.surface, borderTopWidth: i === ses.sel ? 1 : hairline, borderTopColor: i === ses.sel ? color.lineStrong : color.line, borderWidth: i === ses.sel ? 1 : 0, borderColor: color.lineStrong, borderRadius: i === ses.sel ? radius.input : 0 }}>
                     <N size={16} w={500} c={color.sub} style={{ width: 44 }}>{i + 1}</N>
                     <N size={24} w={600} c={vc} style={{ flex: 1, textAlign: 'center' }}>{st.kg}</N>
                     <N size={24} w={600} c={vc} style={{ flex: 1, textAlign: 'center' }}>{st.reps}</N>
-                    <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: st.done }} onPress={() => s.toggleSet(i)} style={{ width: 44, height: 44, borderRadius: radius.input, borderWidth: 1, borderColor: st.done ? color.text : color.lineStrong, backgroundColor: st.done ? color.text : '#fff', alignItems: 'center', justifyContent: 'center' }}>
-                      <T size={18} w={700} c={st.done ? '#fff' : color.lineStrong}>✓</T>
+                    <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: st.done }} onPress={() => s.toggleSet(i)} style={{ width: 44, height: 44, borderRadius: radius.input, borderWidth: 1, borderColor: st.done ? color.text : color.lineStrong, backgroundColor: st.done ? color.text : color.surface, alignItems: 'center', justifyContent: 'center' }}>
+                      <T size={18} w={700} c={st.done ? color.onText : color.lineStrong}>✓</T>
                     </Pressable>
                   </Pressable>
                 );
@@ -290,7 +290,7 @@ function Recording({ insetsTop }: { insetsTop: number }) {
 
 function Stepper({ label, value, onDown, onUp }: { label: string; value: string; onDown: () => void; onUp: () => void }) {
   return (
-    <View style={{ flex: 1, alignItems: 'center', padding: 10, borderRadius: radius.card, backgroundColor: '#fff', borderWidth: hairline, borderColor: color.line }}>
+    <View style={{ flex: 1, alignItems: 'center', padding: 10, borderRadius: radius.card, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line }}>
       <T size={11} c={color.sub}>{label}</T>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
         <StepButton label="−" size={56} onPress={onDown} />

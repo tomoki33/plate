@@ -6,8 +6,8 @@ import { N, T } from './Text';
 /** 主ボタン（黒地に白文字）。コーラルのボタンは作らない */
 export function PrimaryButton({ label, onPress, style, disabled }: { label: string; onPress: () => void; style?: StyleProp<ViewStyle>; disabled?: boolean }) {
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} disabled={disabled} style={({ pressed }) => [s.primary, pressed && { opacity: 0.85 }, disabled && { opacity: 0.4 }, style]}>
-      <T size={14} w={700} c="#fff">
+    <Pressable accessibilityRole="button" onPress={onPress} disabled={disabled} style={({ pressed }) => [s.primary, { backgroundColor: color.text }, pressed && { opacity: 0.85 }, disabled && { opacity: 0.4 }, style]}>
+      <T size={14} w={700} c={color.onText}>
         {label}
       </T>
     </Pressable>
@@ -16,7 +16,7 @@ export function PrimaryButton({ label, onPress, style, disabled }: { label: stri
 
 export function OutlineButton({ label, onPress, style }: { label: string; onPress: () => void; style?: StyleProp<ViewStyle> }) {
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [s.outline, pressed && { opacity: 0.7 }, style]}>
+    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [s.outline, { borderColor: color.text, backgroundColor: color.surface }, pressed && { opacity: 0.7 }, style]}>
       <T size={14} w={700}>
         {label}
       </T>
@@ -37,7 +37,7 @@ export function StepButton({ label, onPress, size = 44, filled }: { label: strin
         pressed && { opacity: 0.7 },
       ]}
     >
-      <N size={size > 48 ? 26 : 20} w={600} c={filled ? '#fff' : color.text}>
+      <N size={size > 48 ? 26 : 20} w={600} c={filled ? color.onText : color.text}>
         {label}
       </N>
     </Pressable>
@@ -45,6 +45,6 @@ export function StepButton({ label, onPress, size = 44, filled }: { label: strin
 }
 
 const s = StyleSheet.create({
-  primary: { height: 52, borderRadius: radius.button, backgroundColor: color.text, alignItems: 'center', justifyContent: 'center' },
-  outline: { height: 52, borderRadius: radius.button, borderWidth: 1, borderColor: color.text, alignItems: 'center', justifyContent: 'center', backgroundColor: color.surface },
+  primary: { height: 52, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center' },
+  outline: { height: 52, borderRadius: radius.button, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 });

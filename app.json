@@ -5,10 +5,14 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.plate.pfc"
+      "bundleIdentifier": "app.plate.pfc",
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -36,7 +40,16 @@
       "expo-font",
       "expo-sharing",
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-apple-authentication",
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "体重と体脂肪率を読み込んで、体重の推移と目標の補正に使います。読み込むだけで、書き込みはしません。",
+          "NSHealthUpdateUsageDescription": "PLATE は、ヘルスケアへの書き込みをしません。",
+          "background": false
+        }
+      ]
     ],
     "scheme": "plate",
     "experiments": {

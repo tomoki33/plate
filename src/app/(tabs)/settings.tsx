@@ -11,7 +11,8 @@ import { templateType, useWeek } from '../../store/selectors';
 import { useStore } from '../../store/store';
 
 const fmt = (n: number) => Math.round(n).toLocaleString();
-const TYPE_COLOR: Record<DayType, string> = { high: color.brand, normal: color.brandPale2, off: color.off };
+/** 日タイプの色（配色が変わっても読み直せるよう関数にする） */
+const typeColor = (t: DayType): string => (t === 'high' ? color.brand : t === 'normal' ? color.brandPale2 : color.off);
 const PLAN_JP = { free: '無料プラン', trial: '無料体験中', paid: '有料プラン' } as const;
 
 export default function SettingsScreen() {
@@ -79,7 +80,7 @@ export default function SettingsScreen() {
 
       <View style={{ marginTop: 22 }}><SectionLabel>日タイプ係数</SectionLabel></View>
       {(['high', 'normal', 'off'] as const).map((t) => (
-        <ListRow key={t} title={DAY_TYPE_JP[t]} dot={TYPE_COLOR[t]} meta={`${fmt(w.plan.days.find((d) => d.type === t)?.kcal ?? 0)} kcal/日`} minHeight={60} right={<Stepper value={profile.coef[t].toFixed(2)} width={52} onDown={() => st.setCoef(t, -0.05)} onUp={() => st.setCoef(t, 0.05)} />} />
+        <ListRow key={t} title={DAY_TYPE_JP[t]} dot={typeColor(t)} meta={`${fmt(w.plan.days.find((d) => d.type === t)?.kcal ?? 0)} kcal/日`} minHeight={60} right={<Stepper value={profile.coef[t].toFixed(2)} width={52} onDown={() => st.setCoef(t, -0.05)} onUp={() => st.setCoef(t, 0.05)} />} />
       ))}
       <ListRow title="P係数（g/kg）" dot={color.P} meta={`P ${w.today.P}g/日（毎日同じ）`} minHeight={60} right={<Stepper value={profile.pk.toFixed(1)} width={52} onDown={() => st.setPk(-0.1)} onUp={() => st.setPk(0.1)} />} />
       {!w.features.linkedTargets && <T size={11} c={color.sub} style={{ marginTop: 6 }}>日タイプ係数は、有料プラン（体験中を含む）で目標に反映されます。</T>}
@@ -91,7 +92,7 @@ export default function SettingsScreen() {
           <View key={i}>
             <ListRow
               title={`${DAY_LABELS[i]}　${id ? (w.templates.find((t) => t.id === id)?.name ?? '—') : 'オフ'}`}
-              dot={TYPE_COLOR[type]}
+              dot={typeColor(type)}
               minHeight={48}
               right={<T size={12} c={color.sub}>{DAY_TYPE_JP[type]} ›</T>}
               onPress={() => setEditDay(editDay === i ? null : i)}

@@ -4,13 +4,13 @@ import { SEED_EXERCISES, SEED_TEMPLATES, SEED_WEEK_PLAN } from '../domain/defaul
 import { MY_FOOD_ALIASES, POPULAR_BY_CODE, SEED_MY_FOODS, searchKey } from '../domain/foodSearch';
 import { DEFAULT_PROFILE, defaultPk } from '../domain/nutrition';
 import { PART_COEF } from '../domain/training';
-import { uuid } from '../lib/id';
 import { db } from './client';
 import * as s from './schema';
 
 type FoodRow = [string, string, string, number, number, number, number];
 
-const SEED_VERSION = 1;
+/** 初期データの版。上げると、起動時に足りないものだけ追加する（ユーザーの編集は上書きしない） */
+const SEED_VERSION = 2;
 
 const chunk = <T,>(xs: T[], n: number): T[][] => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
 
@@ -89,10 +89,10 @@ export async function seedIfNeeded(now = Date.now()): Promise<void> {
   await db
     .insert(s.mealSet)
     .values([
-      { id: uuid(), name: 'プロテイン＋バナナ', items: [{ foodId: myIds.protein, g: 30 }, { foodId: banana, g: 100 }], slotHint: 'トレ後', useCount: 0, lastUsedAt: null, updatedAt: now },
-      { id: uuid(), name: '鶏むね200g・米250g', items: [{ foodId: chicken, g: 200 }, { foodId: rice, g: 250 }], slotHint: '昼', useCount: 0, lastUsedAt: null, updatedAt: now },
-      { id: uuid(), name: '納豆ごはん＋卵', items: [{ foodId: natto, g: 45 }, { foodId: rice, g: 200 }, { foodId: egg, g: 50 }], slotHint: '朝', useCount: 0, lastUsedAt: null, updatedAt: now },
-      { id: uuid(), name: 'ささみ＋さつまいも', items: [{ foodId: sasami, g: 150 }, { foodId: imo, g: 200 }], slotHint: '夜', useCount: 0, lastUsedAt: null, updatedAt: now },
+      { id: 'set_protein_banana', name: 'プロテイン＋バナナ', items: [{ foodId: myIds.protein, g: 30 }, { foodId: banana, g: 100 }], slotHint: 'トレ後', useCount: 0, lastUsedAt: null, updatedAt: now },
+      { id: 'set_chicken_rice', name: '鶏むね200g・米250g', items: [{ foodId: chicken, g: 200 }, { foodId: rice, g: 250 }], slotHint: '昼', useCount: 0, lastUsedAt: null, updatedAt: now },
+      { id: 'set_natto_egg', name: '納豆ごはん＋卵', items: [{ foodId: natto, g: 45 }, { foodId: rice, g: 200 }, { foodId: egg, g: 50 }], slotHint: '朝', useCount: 0, lastUsedAt: null, updatedAt: now },
+      { id: 'set_sasami_imo', name: 'ささみ＋さつまいも', items: [{ foodId: sasami, g: 150 }, { foodId: imo, g: 200 }], slotHint: '夜', useCount: 0, lastUsedAt: null, updatedAt: now },
     ])
     .onConflictDoNothing();
 

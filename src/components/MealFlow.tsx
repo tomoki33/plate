@@ -75,6 +75,10 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [quote, setQuote] = useState('');
+  // 確認画面で、食品を追加（add）・差し替え（replace）するときの選択画面
+  const [picker, setPicker] = useState<null | { mode: 'add' } | { mode: 'replace'; index: number }>(null);
+  const [pickQuery, setPickQuery] = useState('');
+  const [pickResults, setPickResults] = useState<FoodItem[]>([]);
   const aiLeft = Math.max(0, aiLimit - aiUsed);
   const reqId = useRef(0);
 
@@ -101,6 +105,31 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
     }, 120);
     return () => clearTimeout(t);
   }, [open, mode, query]);
+
+  // 確認画面の食品選び（入力が止まってから検索）
+  useEffect(() => {
+    if (!picker) return;
+    const id = ++reqId.current;
+    const t = setTimeout(() => {
+      searchFoodsDb(pickQuery).then((r) => {
+        if (id === reqId.current) setPickResults(r);
+      });
+    }, 120);
+    return () => clearTimeout(t);
+  }, [picker, pickQuery]);
+
+  const pickFood = (f: FoodItem) => {
+    const per100 = { kcal: f.kcal, p: f.p, f: f.f, c: f.c };
+    if (picker?.mode === 'replace') {
+      const i = picker.index;
+      // 量はそのまま引き継ぐ（見つからなかった行は、その食品のいつもの量）
+      setAiRows((rows) => rows!.map((r, j) => (j === i ? { token: r.token, name: f.name, grams: r.grams ?? f.defaultG ?? 100, per100, foodId: f.id, origin: 'manual' } : r)));
+    } else {
+      setAiRows((rows) => [...(rows ?? []), { token: f.name, name: f.name, grams: f.defaultG ?? 100, per100, foodId: f.id, origin: 'manual' }]);
+    }
+    setPicker(null);
+    setPickQuery('');
+  };
 
   // マイセットの中身（食品）を読む
   useEffect(() => {
@@ -373,34 +402,55 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
           {photo && <T size={12} w={700} c={color.brandText} style={{ paddingHorizontal: 20, paddingTop: 8 }}>写真からの量は目安です。違っていたらgを直してください。</T>}
           <ScrollView style={{ flex: 1, marginTop: 8 }} contentContainerStyle={{ paddingHorizontal: 20 }}>
             {(aiRows ?? []).map((r, i) => {
+              const remove = () => setAiRows((rows) => rows!.filter((_, j) => j !== i));
+              const actions = (canSwap: boolean) => (
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Pressable accessibilityRole="button" onPress={() => { setPickQuery(''); setPicker({ mode: 'replace', index: i }); }} style={{ minHeight: 44, justifyContent: 'center', paddingRight: 14 }}>
+                    <T size={12} w={700} style={{ textDecorationLine: 'underline' }}>{canSwap ? '食品を変える' : '食品を選ぶ'}</T>
+                  </Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel={`${r.name ?? r.token}を削除`} onPress={remove} style={{ minHeight: 44, justifyContent: 'center' }}>
+                    <T size={12} c={color.brandText}>削除</T>
+                  </Pressable>
+                </View>
+              );
               if (!r.per100) {
                 return (
-                  <View key={i} style={{ paddingVertical: 12, borderBottomWidth: hairline, borderBottomColor: color.line, gap: 6 }}>
+                  <View key={i} style={{ paddingTop: 12, borderBottomWidth: hairline, borderBottomColor: color.line }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <T size={14} w={500}>{r.token}</T>
                       <Tag>見つからず</Tag>
                     </View>
-                    <T size={11.5} c={color.sub}>成分表にないため除外します。検索から追加できます。</T>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <T size={11.5} c={color.sub} style={{ flex: 1 }}>成分表にないため、いまは除外します。</T>
+                      {actions(false)}
+                    </View>
                   </View>
                 );
               }
               const x = scale(r.per100, r.grams!);
-              const setGrams = (g: number) => setAiRows((rows) => rows!.map((z, j) => (j === i ? { ...z, grams: Math.max(10, g) } : z)));
+              const setGrams = (g: number) => setAiRows((rows) => rows!.map((z, j) => (j === i ? { ...z, grams: Math.max(1, g) } : z)));
               return (
-                <View key={i} style={{ paddingVertical: 12, borderBottomWidth: hairline, borderBottomColor: color.line, gap: 6 }}>
+                <View key={i} style={{ paddingTop: 12, borderBottomWidth: hairline, borderBottomColor: color.line }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                     <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
                       <T size={14} w={500}>{shortName(r.name!)}</T>
-                      <Tag>{r.origin === 'photo' ? '写真から推定' : r.origin === 'ai' ? 'AI推定' : '成分表と照合'}</Tag>
+                      <Tag>{r.origin === 'manual' ? '手動で選択' : r.origin === 'photo' ? '写真から推定' : r.origin === 'ai' ? 'AI推定' : '成分表と照合'}</Tag>
                     </View>
                     <View style={{ width: 132 }}>
                       <StepBox value={String(r.grams)} onDown={() => setGrams(r.grams! - 10)} onUp={() => setGrams(r.grams! + 10)} height={40} buttonWidth={40} size={17} radiusPx={radius.input} label={`${r.token}の`} />
                     </View>
                   </View>
-                  <N size={11.5} w={500} c={color.sub}>{pfcLine(x)}</N>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <N size={11.5} w={500} c={color.sub}>{pfcLine(x)}</N>
+                    {actions(true)}
+                  </View>
                 </View>
               );
             })}
+            {(aiRows ?? []).length === 0 && <T size={13} c={color.sub} style={{ paddingVertical: 16 }}>読み取れた食品がありません。下から追加してください。</T>}
+            <Pressable accessibilityRole="button" onPress={() => { setPickQuery(''); setPicker({ mode: 'add' }); }} style={{ marginTop: 12, marginBottom: 8, height: 48, borderWidth: hairline, borderColor: color.lineStrong, borderRadius: radius.button, backgroundColor: color.surface, alignItems: 'center', justifyContent: 'center' }}>
+              <T size={14} w={500}>＋ 食品を追加</T>
+            </Pressable>
           </ScrollView>
           {/* 合計：kcal と P/F/C */}
           <View style={{ marginHorizontal: 20, marginTop: 12, flexDirection: 'row', borderWidth: hairline, borderColor: color.line, borderRadius: radius.card, backgroundColor: color.surface, overflow: 'hidden' }}>
@@ -426,6 +476,39 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
               </Pressable>
             )}
           </View>
+          {/* 食品を選ぶ（追加・差し替え）。確認画面の上に重ねる */}
+          {picker && (
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: color.bg, paddingTop: 54 }}>
+              <View style={{ paddingHorizontal: 20, height: 44, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Pressable accessibilityRole="button" onPress={() => setPicker(null)} style={{ minHeight: 44, justifyContent: 'center' }}>
+                  <T size={14} c={color.sub}>戻る</T>
+                </Pressable>
+                <T size={15} w={700}>{picker.mode === 'add' ? '食品を追加' : '食品を選ぶ'}</T>
+                <View style={{ width: 28 }} />
+              </View>
+              <TextInput
+                value={pickQuery}
+                onChangeText={setPickQuery}
+                placeholder="食品名で検索（例：さば、卵）"
+                placeholderTextColor={color.faint}
+                autoFocus
+                style={{ marginHorizontal: 20, marginTop: 8, height: 46, borderWidth: hairline, borderColor: color.lineStrong, borderRadius: radius.input, backgroundColor: color.surface, paddingHorizontal: 12, fontFamily: font.jp, fontSize: 15, color: color.text }}
+              />
+              <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 }}>
+                {!pickQuery.trim() && <T size={11} c={color.sub} style={{ paddingVertical: 8 }}>マイ食品とよく使う食品</T>}
+                {pickResults.length === 0 && pickQuery.trim() !== '' && <T size={13} c={color.sub} style={{ paddingVertical: 12 }}>見つかりませんでした。</T>}
+                {pickResults.map((f) => (
+                  <Pressable key={f.id} accessibilityRole="button" onPress={() => pickFood(f)} style={{ minHeight: 54, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: hairline, borderBottomColor: color.line, gap: 8 }}>
+                    <View style={{ flex: 1 }}>
+                      <T size={14}>{shortName(f.name)}</T>
+                      <N size={11} w={500} c={color.sub}>100gあたり P{f.p} F{f.f} C{f.c}・{f.kcal}kcal</N>
+                    </View>
+                    <T size={11} c={color.sub}>{f.source === '自作' ? 'マイ食品' : '成分表'}</T>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
       </Modal>
     </>

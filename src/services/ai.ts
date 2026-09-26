@@ -11,8 +11,8 @@ export interface EstimateRow {
   /** 100gあたり（成分表・マイ食品の値。AIには直接PFCを出させない） */
   per100?: { kcal: number; p: number; f: number; c: number };
   foodId?: string;
-  /** 'table'：文章と成分表の照合、'ai'：AIが文章から推定、'photo'：写真から推定 */
-  origin?: 'table' | 'ai' | 'photo';
+  /** 'table'：文章と成分表の照合、'ai'：AIが文章から推定、'photo'：写真から推定、'manual'：利用者が追加・差し替え */
+  origin?: 'table' | 'ai' | 'photo' | 'manual';
 }
 
 export interface EstimateResult {

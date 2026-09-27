@@ -14,9 +14,25 @@ export type Db = SqliteRemoteDatabase<typeof schema>;
 export let sqlite: SQLiteDatabase;
 export let db: Db;
 
+/**
+ * Web は、ブラウザ内のファイル（OPFS）を1つの接続しか開けない。ほかのタブや、直前のタブ・ホットリロードの
+ * 接続が残っていると開けないので、少し待って数回やり直す。
+ */
+async function openWithRetry(): Promise<SQLiteDatabase> {
+  for (let i = 0; ; i++) {
+    try {
+      return await openDatabaseAsync('plate.db');
+    } catch (e) {
+      const busy = e instanceof Error && /Access Handle|NoModificationAllowed/i.test(`${e.name} ${e.message}`);
+      if (!busy || i >= 6) throw e;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+}
+
 let pending: Promise<Db> | undefined;
 export function initDb(): Promise<Db> {
-  pending ??= openDatabaseAsync('plate.db').then((s) => {
+  pending ??= openWithRetry().then((s) => {
     sqlite = s;
     db = drizzle(
       async (sql, params, method) => {
@@ -33,6 +49,10 @@ export function initDb(): Promise<Db> {
       { schema },
     );
     return db;
+  });
+  // 失敗したら、次の呼び出しでやり直せるようにする
+  pending.catch(() => {
+    pending = undefined;
   });
   return pending;
 }

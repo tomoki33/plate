@@ -50,7 +50,12 @@ function ErrorView({ message }: { message: string }) {
   return (
     <View style={{ flex: 1, backgroundColor: color.bg, padding: 24, justifyContent: 'center' }}>
       <T size={16} w={700}>データベースを開けませんでした</T>
-      <T size={12} c={color.sub} style={{ marginTop: 8 }}>{message}</T>
+      {/Access Handle|NoModificationAllowed/i.test(message) && (
+        <T size={13} style={{ marginTop: 10, lineHeight: 21 }}>
+          このアプリを開いているほかのタブがあります。ほかのタブをすべて閉じてから、このページを再読み込みしてください。（Web版は、データを保存するファイルを1つのタブしか開けません）
+        </T>
+      )}
+      <T size={11} c={color.sub} style={{ marginTop: 8 }}>{message}</T>
     </View>
   );
 }

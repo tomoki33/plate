@@ -1,18 +1,28 @@
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { Modal, Pressable, ScrollView, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Bar, Badge, Chip, N, Notice, OutlineButton, PrimaryButton, StepBox, T, color, hairline, radius } from '@/design-system';
+import { Badge, N, Notice, T, color, font, hairline, radius } from '@/design-system';
+import { getFoodsByIds } from '../../db/repo';
 import { ExercisePicker } from '../../components/ExercisePicker';
 import { useNow } from '../../components/useNow';
-import { DEFAULT_MEDIAN_VOLUME, median } from '../../domain/training';
-import { DAY_LABELS, DAY_TYPE_JP } from '../../domain/types';
+import { shortExName } from '../../domain/exerciseNames';
+import type { SessionRecord, WorkoutTemplate } from '../../domain/models';
+import { DEFAULT_MEDIAN_VOLUME, estimate1RM, median } from '../../domain/training';
+import { DAY_TYPE_JP } from '../../domain/types';
 import { useWeek } from '../../store/selectors';
 import { useStore } from '../../store/store';
 
 const fmt = (n: number) => Math.round(n).toLocaleString();
 const sign = (n: number) => (n >= 0 ? '+' : '−');
 const mmss = (r: number) => `${Math.floor(r / 60)}:${String(r % 60).padStart(2, '0')}`;
+const WD = ['日', '月', '火', '水', '木', '金', '土'];
+const kgTimes = (kg: number) => (kg > 0 ? `${kg}kg × ` : '× ');
+/** 休憩の黒い帯は、ダークモードでも黒のまま */
+const REST_BG = '#1F1712';
+const REST_TRACK = '#3A2E26';
+const REST_TEXT = '#FBF7F3';
+const REST_ACCENT = '#F7CDBB';
 
 export default function TrainingScreen() {
   const insets = useSafeAreaInsets();
@@ -25,120 +35,137 @@ export default function TrainingScreen() {
   const templates = useStore((s) => s.templates);
   const exercises = useStore((s) => s.exercises);
   const startSession = useStore((s) => s.startSession);
+  const resumeSession = useStore((s) => s.resumeSession);
   const setDayType = useStore((s) => s.setDayType);
   const showToast = useStore((s) => s.showToast);
   const setDoneOpen = useStore((s) => s.setDoneOpen);
-  const deleteSession = useStore((s) => s.deleteSession);
-  const [open, setOpen] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState<string | null>(null);
 
   const scheduled = templates.find((t) => t.id === w.todayTemplateId) ?? null;
-  const others = templates.filter((t) => t.id !== w.todayTemplateId);
+  const done = !!w.todayWorkout;
   const history = sessions.slice(-8).reverse();
   const exName = (id: string) => exercises.find((e) => e.id === id)?.name ?? '';
 
   if (session) return <Recording insetsTop={insets.top} />;
 
+  /** そのメニューの前回の記録 */
+  const lastOf = (t: WorkoutTemplate): SessionRecord | null => [...sessions].reverse().find((x) => x.templateId === t.id) ?? null;
+  const rowMeta = (t: WorkoutTemplate, i: number) => {
+    const e = t.exercises[i];
+    const prev = lastOf(t)?.exercises.find((x) => x.exerciseId === e.exerciseId);
+    const sets = prev?.sets.filter((x) => x.done);
+    if (sets?.length) return `${kgTimes(sets[0].kg)}${sets.map((x) => x.reps).join('・')}`;
+    return `${kgTimes(e.kg)}${Array.from({ length: e.sets }, () => e.reps).join('・')}`;
+  };
+  const prevLabel = (t: WorkoutTemplate) => {
+    const l = lastOf(t);
+    if (!l) return null;
+    const [, m, d] = l.date.split('-').map(Number);
+    return `前回の${t.name} ${m}/${d}（${WD[new Date(l.date.replace(/-/g, '/')).getDay()]}）`;
+  };
+  const menuMeta = (t: WorkoutTemplate) => t.exercises.map((e) => shortExName(exName(e.exerciseId))).join('・');
+  const typeJp = (t: WorkoutTemplate) => (t.defaultDayType === 'high' ? '高' : '通常');
+  // 予定を変える／もう1回トレーニングする：予定のメニュー以外（完了後は、すべて）
+  const others = done ? templates : templates.filter((t) => t.id !== w.todayTemplateId);
+
   return (
     <View style={{ flex: 1, backgroundColor: color.bg }}>
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: 30 }}>
         <T size={22} w={900} style={{ paddingHorizontal: 20 }}>トレーニング</T>
 
-        {w.todayWorkout ? (
-          <View style={{ marginHorizontal: 16, marginTop: 14, padding: 14, borderRadius: radius.card, backgroundColor: color.brandPale, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-            <T size={13} numberOfLines={1} style={{ flex: 1 }}><T size={13} w={700} c={color.brandText}>今日は完了</T>　{w.todayWorkout.name}</T>
-            <Pressable accessibilityRole="button" onPress={() => setDoneOpen(true)} style={{ minHeight: 44, justifyContent: 'center' }}>
-              <T size={13} w={700}>結果を見る ›</T>
-            </Pressable>
-          </View>
-        ) : scheduled && w.today.type !== 'off' ? (
-          <View style={{ marginHorizontal: 16, marginTop: 14, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line, borderRadius: radius.card, overflow: 'hidden' }}>
-            <View style={{ padding: 16, paddingBottom: 12, gap: 6 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <T size={12} c={color.sub}>今日の予定</T>
-                <Badge high={scheduled.defaultDayType === 'high'}>{DAY_TYPE_JP[scheduled.defaultDayType]}</Badge>
-              </View>
-              <T size={22} w={900}>{scheduled.name}</T>
-              <T size={12} c={color.sub}>{scheduled.exercises.length}種目・{scheduled.exercises.reduce((a, e) => a + e.sets, 0)}セット</T>
+        {done && (
+          <View style={{ marginHorizontal: 16, marginTop: 14, padding: 14, borderRadius: 12, backgroundColor: color.brandPale, gap: 12 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <T size={15} w={700} c={color.brandText} numberOfLines={1} style={{ flex: 1 }}>今日の{w.todayWorkout!.name} 完了</T>
+              <N size={14} w={500} c={color.badgeFg}>{w.todayWorkout!.doneSets}セット</N>
             </View>
-            {/* 種目は1行ずつ（メニューの中身が、ひと目で分かる） */}
-            <View style={{ paddingHorizontal: 16 }}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <SoftButton label="結果を見る" onPress={() => setDoneOpen(true)} />
+              <SoftButton label="続きを記録" onPress={resumeSession} />
+            </View>
+          </View>
+        )}
+
+        {!done && scheduled && w.today.type !== 'off' && (
+          <View style={{ marginHorizontal: 16, marginTop: 14, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line, borderRadius: 10, padding: 16, gap: 12 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <T size={12} c={color.sub}>今日の予定</T>
+              <Badge high={scheduled.defaultDayType === 'high'}>{typeJp(scheduled)}</Badge>
+            </View>
+            <T size={20} w={900}>{scheduled.name}</T>
+            {prevLabel(scheduled) && <T size={12} c={color.sub} style={{ marginBottom: -6 }}>{prevLabel(scheduled)}</T>}
+            <View style={{ borderTopWidth: hairline, borderTopColor: color.line }}>
               {scheduled.exercises.map((e, i) => (
-                <View key={`${e.exerciseId}-${i}`} style={{ minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: hairline, borderTopColor: color.line }}>
-                  <N size={12} w={600} c={color.faint} style={{ width: 16 }}>{i + 1}</N>
+                <View key={`${e.exerciseId}-${i}`} style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', borderBottomWidth: hairline, borderBottomColor: color.line }}>
+                  <N size={15} w={600} c={color.sub} style={{ width: 24 }}>{i + 1}</N>
                   <T size={14} numberOfLines={1} style={{ flex: 1 }}>{exName(e.exerciseId)}</T>
-                  <N size={12} w={500} c={color.sub}>{e.sets}セット × {e.reps}回</N>
+                  <N size={15} w={600} c={color.badgeFg}>{rowMeta(scheduled, i)}</N>
                 </View>
               ))}
             </View>
-            <View style={{ padding: 16, paddingTop: 14 }}>
-              <PrimaryButton label="開始" onPress={() => startSession(scheduled.id)} />
-            </View>
+            <Pressable accessibilityRole="button" onPress={() => startSession(scheduled.id)} style={{ height: 64, borderRadius: radius.button, backgroundColor: color.text, alignItems: 'center', justifyContent: 'center' }}>
+              <T size={16} w={700} c={color.onText}>開始</T>
+            </Pressable>
           </View>
-        ) : (
-          <View style={{ marginHorizontal: 16, marginTop: 14, padding: 16, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line, borderRadius: radius.card, gap: 4 }}>
+        )}
+
+        {!done && (!scheduled || w.today.type === 'off') && (
+          <View style={{ marginHorizontal: 16, marginTop: 14, padding: 16, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line, borderRadius: 10, gap: 4 }}>
             <T size={12} c={color.sub}>今日の予定</T>
-            <T size={22} w={900}>今日はオフ</T>
+            <T size={20} w={900}>今日はオフ</T>
             <T size={12} c={color.sub}>やる日に変えるときは、下から選べます。</T>
           </View>
         )}
 
-        {!w.todayWorkout && (
-          <>
-            <T size={11} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 22, paddingBottom: 6 }}>予定を変える</T>
-            <View style={{ marginHorizontal: 16, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line, borderRadius: radius.card, overflow: 'hidden' }}>
-              {others.map((t) => (
-                <PlanRow key={t.id} title={t.name} meta={`${t.exercises.length}種目・${t.exercises.reduce((a, e) => a + e.sets, 0)}セット・日タイプ ${DAY_TYPE_JP[t.defaultDayType]}`} action="開始" onPress={() => startSession(t.id)} />
-              ))}
-              <PlanRow title="フリートレーニング" meta="種目をその場で選ぶ" action="開始" onPress={() => startSession(null)} last={w.today.type === 'off'} />
-              {w.today.type !== 'off' && (
-                <PlanRow
-                  title="今日は休む"
-                  meta={w.features.linkedTargets ? '残りの日に配り直す' : '目標は変わりません（無料プラン）'}
-                  action="オフにする"
-                  last
-                  onPress={() => {
-                    const prev = useStore.getState().dayTypes[w.todayKey] ?? null;
-                    setDayType(w.todayKey, 'off');
-                    showToast(w.features.linkedTargets ? '今日をオフに変更。目標を配り直しました' : '今日をオフにしました', () => useStore.getState().setDayType(w.todayKey, prev));
-                    router.navigate('/');
-                  }}
-                />
-              )}
-            </View>
-          </>
-        )}
+        <T size={11} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 6 }}>{done ? 'もう1回トレーニングする' : '予定を変える'}</T>
+        <View style={{ marginHorizontal: 16, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line, borderRadius: 12, overflow: 'hidden' }}>
+          {others.map((t) => (
+            <ListLine key={t.id} height={64} title={t.name} meta={menuMeta(t)} badge={typeJp(t)} onPress={() => startSession(t.id)} />
+          ))}
+          <ListLine height={64} title="フリートレーニング" meta="種目をその場で選ぶ" badge="通常" onPress={() => startSession(null)} last={done || w.today.type === 'off'} />
+          {!done && w.today.type !== 'off' && (
+            <ListLine
+              height={64}
+              title="今日は休む"
+              meta={w.features.linkedTargets ? '残りの日に配り直す' : '目標は変わりません（無料プラン）'}
+              badge="オフ"
+              last
+              onPress={() => {
+                const prev = useStore.getState().dayTypes[w.todayKey] ?? null;
+                setDayType(w.todayKey, 'off');
+                showToast(w.features.linkedTargets ? '今日をオフに変更。目標を配り直しました' : '今日をオフにしました', () => useStore.getState().setDayType(w.todayKey, prev));
+                router.navigate('/');
+              }}
+            />
+          )}
+        </View>
 
-        <T size={11} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 4 }}>履歴</T>
-        <View style={{ paddingHorizontal: 20 }}>
-          {history.length === 0 && <T size={13} c={color.sub} style={{ paddingVertical: 14 }}>まだトレーニングの記録がありません。</T>}
-          {history.map((h) => {
-            const d = new Date(h.endedAt);
-            const isOpen = open === h.id;
+        <T size={11} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 6 }}>メニュー</T>
+        <View style={{ marginHorizontal: 16, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line, borderRadius: 12, overflow: 'hidden' }}>
+          {templates.map((t) => (
+            <ListLine key={t.id} height={60} title={t.name} meta={`${t.exercises.length}種目`} badge={typeJp(t)} onPress={() => router.push({ pathname: '/template/[id]', params: { id: t.id } })} />
+          ))}
+          <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/template/[id]', params: { id: 'new' } })} style={{ minHeight: 56, alignItems: 'center', justifyContent: 'center' }}>
+            <T size={14} w={700}>＋ 新しいメニュー</T>
+          </Pressable>
+        </View>
+
+        <T size={11} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 6 }}>履歴</T>
+        <View style={{ marginHorizontal: 16, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line, borderRadius: 12, overflow: 'hidden' }}>
+          {history.length === 0 && <T size={13} c={color.sub} style={{ padding: 16 }}>まだトレーニングの記録がありません。</T>}
+          {history.map((h, i) => {
+            const [, m, d] = h.date.split('-').map(Number);
+            const wd = WD[new Date(h.date.replace(/-/g, '/')).getDay()];
             const mins = Math.max(1, Math.round((h.endedAt - h.startedAt) / 60000));
             return (
-              <View key={h.id} style={{ borderBottomWidth: hairline, borderBottomColor: color.line }}>
-                <Pressable accessibilityRole="button" onPress={() => { setOpen(isOpen ? null : h.id); setConfirm(null); }} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <View style={{ flexDirection: 'row', flex: 1, minWidth: 0 }}>
-                    <T size={13} c={color.sub} style={{ width: 56 }}>{d.getMonth() + 1}/{d.getDate()} {DAY_LABELS[(d.getDay() + 6) % 7]}</T>
-                    <T size={13} numberOfLines={1} style={{ flex: 1 }}>{h.name}</T>
-                  </View>
-                  <T size={12} c={color.sub} numberOfLines={1} style={{ marginLeft: 8 }}>{h.doneSets}セット・{mins}分</T>
-                </Pressable>
-                {isOpen && (
-                  <View style={{ paddingBottom: 10, gap: 4 }}>
-                    {h.exercises.map((e) => (
-                      <View key={e.exerciseId} style={{ flexDirection: 'row', gap: 8 }}>
-                        <T size={12} style={{ flex: 1 }}>{e.name}</T>
-                        <N size={12} w={500} c={color.sub}>{e.sets.map((x) => `${x.kg}×${x.reps}`).join('・')}</N>
-                      </View>
-                    ))}
-                    <Pressable accessibilityRole="button" onPress={() => (confirm === h.id ? (deleteSession(h.id), setOpen(null)) : setConfirm(h.id))} style={{ minHeight: 44, justifyContent: 'center' }}>
-                      <T size={12} w={700} c={color.brandText}>{confirm === h.id ? 'もう一度押すと、この記録を削除' : 'この記録を削除'}</T>
-                    </Pressable>
-                  </View>
-                )}
-              </View>
+              <Pressable key={h.id} accessibilityRole="button" onPress={() => router.navigate({ pathname: '/review', params: { date: h.date } })} style={{ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 14, paddingRight: 12, borderBottomWidth: i === history.length - 1 ? 0 : hairline, borderBottomColor: color.line }}>
+                <View style={{ width: 52 }}>
+                  <N size={18} w={600} style={{ lineHeight: 21 }}>{m}/{d}</N>
+                  <T size={10.5} c={color.sub}>{wd}</T>
+                </View>
+                <T size={15} w={500} numberOfLines={1} style={{ flex: 1 }}>{h.name}</T>
+                <N size={15} w={500} c={color.badgeFg}>{h.doneSets}セット · {mins}分</N>
+                <T size={16} c={color.sub}>›</T>
+              </Pressable>
             );
           })}
         </View>
@@ -161,214 +188,299 @@ export default function TrainingScreen() {
   );
 }
 
+function SoftButton({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={{ flex: 1, height: 52, borderRadius: 10, backgroundColor: color.surface, alignItems: 'center', justifyContent: 'center' }}>
+      <T size={14} w={700}>{label}</T>
+    </Pressable>
+  );
+}
+
+/** 一覧の1行：名前・メタ・日タイプのバッジ・›。押すとその行の動作（開始・編集） */
+function ListLine({ title, meta, badge, onPress, height, last }: { title: string; meta: string; badge: string; onPress: () => void; height: number; last?: boolean }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={{ minHeight: height, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 8, paddingLeft: 14, paddingRight: 12, borderBottomWidth: last ? 0 : hairline, borderBottomColor: color.line }}>
+      <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+        <T size={15} w={500} numberOfLines={1}>{title}</T>
+        <T size={12} c={color.sub} numberOfLines={1}>{meta}</T>
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={{ backgroundColor: color.badgeBg, borderRadius: radius.badge, paddingHorizontal: 8, paddingVertical: 4 }}>
+          <T size={11} w={700} c={color.badgeFg}>{badge}</T>
+        </View>
+        <T size={16} c={color.sub}>›</T>
+      </View>
+    </Pressable>
+  );
+}
+
 function Recording({ insetsTop }: { insetsTop: number }) {
   const s = useStore();
   const ses = s.session!;
   const ex = ses.ex[ses.cur];
   const [picker, setPicker] = useState(ses.ex.length === 0);
-  const [confirmCancel, setConfirmCancel] = useState(false);
-  const doneN = ses.ex.reduce((a, e) => a + e.sets.filter((x) => x.done).length, 0);
-  const total = ses.ex.reduce((a, e) => a + e.sets.length, 0);
   const sel = ex?.sets[ses.sel];
-  const hasNext = ses.cur < ses.ex.length - 1;
+  // 種目を1つも入れずに始めたら、最初に種目を選ぶシートを出す
+  useEffect(() => {
+    if (ses.ex.length === 0) setPicker(true);
+  }, [ses.ex.length]);
+
+  // 主ボタン：✓ Nセット目を記録 → その種目が全部終わったら「次へ：（種目名）」→ すべて終わったら「トレーニングを完了」
+  let mainLabel = '種目を追加';
+  let mainAct: () => void = () => setPicker(true);
+  if (ex && sel) {
+    const nu = ex.sets.findIndex((x) => !x.done);
+    const allDone = ses.ex.every((e) => e.sets.every((x) => x.done));
+    if (!sel.done) {
+      mainLabel = `✓ ${ses.sel + 1}セット目を記録`;
+      mainAct = () => s.toggleSet(ses.sel);
+    } else if (nu >= 0) {
+      mainLabel = `✓ ${nu + 1}セット目を記録`;
+      mainAct = () => s.toggleSet(nu);
+    } else if (!allDone) {
+      const ni = ses.ex.findIndex((e, j) => j !== ses.cur && e.sets.some((x) => !x.done));
+      mainLabel = `次へ：${shortExName(ses.ex[ni].name)}`;
+      mainAct = () => s.selectExercise(ni);
+    } else {
+      mainLabel = 'トレーニングを完了';
+      mainAct = () => s.finishSession();
+    }
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: color.bg }}>
-      <ScrollView contentContainerStyle={{ paddingTop: insetsTop + 8, paddingBottom: 24 }}>
-        <View style={{ paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <View style={{ flex: 1 }}>
-            <T size={12} c={color.sub}>{ses.name}・{doneN}/{total} セット</T>
-            <T size={20} w={900} numberOfLines={1}>{ex?.name ?? '種目を選ぶ'}</T>
-          </View>
-          <Pressable accessibilityRole="button" onPress={() => (confirmCancel ? s.cancelSession() : setConfirmCancel(true))} style={{ minHeight: 44, justifyContent: 'center', paddingLeft: 12 }}>
-            <T size={12} w={confirmCancel ? 700 : 400} c={confirmCancel ? color.brandText : color.sub}>{confirmCancel ? 'もう一度押すと中止' : '中止'}</T>
+      <ScrollView contentContainerStyle={{ paddingTop: insetsTop + 4, paddingBottom: 16 }}>
+        {/* 種目の列：どれを押しても切り替わる。右に固定の「＋」と「終える」 */}
+        <View style={{ paddingLeft: 14, paddingRight: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ gap: 6, paddingRight: 16 }}>
+            {ses.ex.map((e, i) => {
+              const all = e.sets.every((x) => x.done);
+              const on = i === ses.cur;
+              return (
+                <Pressable key={`${e.exerciseId}-${i}`} accessibilityRole="button" onPress={() => s.selectExercise(i)} style={{ height: 40, paddingHorizontal: 12, borderRadius: radius.button, borderWidth: hairline, borderColor: on ? color.text : all ? color.track : color.lineStrong, backgroundColor: on ? color.text : all ? color.track : color.surface, alignItems: 'center', justifyContent: 'center' }}>
+                  <T size={12.5} w={on ? 700 : 400} c={on ? color.onText : all ? color.sub : color.text}>{(all ? '✓ ' : '') + shortExName(e.name)}</T>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          <Pressable accessibilityRole="button" accessibilityLabel="種目を追加" onPress={() => setPicker(true)} style={{ width: 44, height: 40, borderRadius: radius.button, borderWidth: hairline, borderColor: color.lineStrong, backgroundColor: color.surface, alignItems: 'center', justifyContent: 'center' }}>
+            <T size={20}>＋</T>
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={() => s.finishSession()} style={{ height: 44, paddingHorizontal: 4, justifyContent: 'center' }}>
+            <T size={14} w={700}>終える</T>
           </Pressable>
         </View>
 
-        {/* 種目の切替（選択中は黒） */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 6, marginTop: 10 }}>
-          {ses.ex.map((e, i) => {
-            const all = e.sets.every((x) => x.done);
-            const on = i === ses.cur;
-            return (
-              <Pressable key={`${e.exerciseId}-${i}`} accessibilityRole="button" onPress={() => s.selectExercise(i)} style={{ minHeight: 44, paddingHorizontal: 12, borderRadius: radius.input, borderWidth: hairline, borderColor: on ? color.text : color.line, backgroundColor: on ? color.text : color.surface, alignItems: 'center', justifyContent: 'center' }}>
-                <T size={12} c={on ? color.onText : all ? color.sub : color.text}>{(all ? '✓ ' : '') + e.name}</T>
-              </Pressable>
-            );
-          })}
-          <Chip label="＋ 種目" onPress={() => setPicker(true)} />
-        </ScrollView>
-
         {ex ? (
           <>
-            <T size={12} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 10 }}>前回 {ex.prevKg}kg × {ex.prevReps}・{ex.prevReps}・{ex.prevReps}</T>
+            <View style={{ paddingHorizontal: 20, paddingTop: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <T size={26} w={900} numberOfLines={1} style={{ flexShrink: 1 }}>{ex.name}</T>
+              {!!ex.tip && <Badge high>{ex.tip}</Badge>}
+            </View>
+            <N size={13} w={500} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 2 }}>前回 {ex.prevKg > 0 ? `${ex.prevKg} × ` : '× '}{(ex.prevRepsList ?? [ex.prevReps, ex.prevReps, ex.prevReps]).join('・')}</N>
 
-            {/* セット表 */}
-            <View style={{ marginHorizontal: 16, marginTop: 10, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line, borderRadius: radius.card, overflow: 'hidden' }}>
-              <View style={{ flexDirection: 'row', paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4 }}>
-                <T size={10.5} c={color.sub} style={{ width: 40 }}>セット</T>
-                <T size={10.5} c={color.sub} style={{ flex: 1 }}>kg</T>
-                <T size={10.5} c={color.sub} style={{ flex: 1 }}>回</T>
-                <View style={{ width: 52 }} />
-              </View>
+            {/* セットの表：選んでいる行だけ開き、kgと回の±ボタンを出す */}
+            <View style={{ marginHorizontal: 14, marginTop: 12, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line, borderRadius: 14, overflow: 'hidden' }}>
               {ex.sets.map((st, i) => {
-                const touched = st.done || st.kg !== ex.prevKg || st.reps !== ex.prevReps;
-                const vc = touched ? color.text : color.faint;
+                const open = i === ses.sel;
+                const vc = st.done || open ? color.text : color.faint;
                 return (
-                  <Pressable key={i} accessibilityRole="button" onPress={() => s.selectSet(i)} style={{ height: 54, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, backgroundColor: i === ses.sel ? color.bg : color.surface, borderTopWidth: hairline, borderTopColor: color.line }}>
-                    <N size={15} w={600} c={color.sub} style={{ width: 40 }}>{i + 1}</N>
-                    <N size={22} w={600} c={vc} style={{ flex: 1 }}>{st.kg}</N>
-                    <N size={22} w={600} c={vc} style={{ flex: 1 }}>{st.reps}</N>
-                    <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: st.done }} onPress={() => s.toggleSet(i)} style={{ width: 44, height: 44, marginLeft: 8, borderRadius: radius.button, borderWidth: 1, borderColor: st.done ? color.text : color.lineStrong, backgroundColor: st.done ? color.text : color.surface, alignItems: 'center', justifyContent: 'center' }}>
-                      <T size={16} w={700} c={st.done ? color.onText : color.lineStrong}>✓</T>
+                  <View key={i}>
+                    <Pressable accessibilityRole="button" onPress={() => s.selectSet(i)} style={{ height: 54, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, borderBottomWidth: hairline, borderBottomColor: color.line }}>
+                      <N size={16} w={600} c={color.sub} style={{ width: 36 }}>{i + 1}</N>
+                      <N size={24} w={600} c={vc} style={{ flex: 1 }}>{st.kg}</N>
+                      <N size={24} w={600} c={vc} style={{ flex: 1 }}>{st.reps}</N>
+                      <Pressable accessibilityRole="checkbox" accessibilityLabel={`${i + 1}セット目`} accessibilityState={{ checked: st.done }} onPress={() => s.toggleSet(i)} style={{ width: 46, height: 46, marginLeft: 6, borderRadius: 10, borderWidth: 1, borderColor: st.done ? color.text : color.lineStrong, backgroundColor: st.done ? color.text : color.surface, alignItems: 'center', justifyContent: 'center' }}>
+                        <T size={16} w={700} c={st.done ? color.onText : color.lineStrong}>✓</T>
+                      </Pressable>
                     </Pressable>
-                  </Pressable>
+                    {open && (
+                      <View style={{ padding: 12, backgroundColor: color.bg, borderBottomWidth: hairline, borderBottomColor: color.line, flexDirection: 'row', gap: 10 }}>
+                        <BigStep value={String(st.kg)} unit="kg" onDown={() => s.adjustSet('kg', -2.5)} onUp={() => s.adjustSet('kg', 2.5)} />
+                        <BigStep value={String(st.reps)} unit="回" onDown={() => s.adjustSet('reps', -1)} onUp={() => s.adjustSet('reps', 1)} />
+                      </View>
+                    )}
+                  </View>
                 );
               })}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: hairline, borderTopColor: color.line }}>
-                <Pressable accessibilityRole="button" onPress={s.addSet} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 12 }}><T size={12} w={700}>＋ セット追加</T></Pressable>
-                {ex.sets.length > 1 && <Pressable accessibilityRole="button" onPress={s.removeSet} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 12 }}><T size={12} c={color.sub}>選んだセットを削除</T></Pressable>}
-              </View>
+              <Pressable accessibilityRole="button" onPress={s.addSet} style={{ height: 48, alignItems: 'center', justifyContent: 'center' }}>
+                <T size={14} w={700}>＋ セットを追加</T>
+              </Pressable>
             </View>
-
-            {/* 大きな±ボタン（kg±2.5、回±1） */}
-            {sel && (
-              <View style={{ marginTop: 10, marginHorizontal: 16, flexDirection: 'row', gap: 8 }}>
-                <View style={{ flex: 1 }}>
-                  <StepBox value={String(sel.kg)} caption="kg ±2.5" onDown={() => s.adjustSet('kg', -2.5)} onUp={() => s.adjustSet('kg', 2.5)} height={48} buttonWidth={44} size={18} label="kg" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <StepBox value={String(sel.reps)} caption="回" onDown={() => s.adjustSet('reps', -1)} onUp={() => s.adjustSet('reps', 1)} height={48} buttonWidth={44} size={18} label="回" />
-                </View>
-              </View>
-            )}
-            <T size={11.5} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 8 }}>行を押して選び、下のボタンで調整。薄い数字は前回の値。</T>
-
-            {/* RIR（あと何回できたか・任意） */}
-            {sel && (
-              <View style={{ marginHorizontal: 16, marginTop: 8 }}>
-                <T size={11} c={color.sub}>RIR（あと何回できたか・任意）</T>
-                <View style={{ flexDirection: 'row', gap: 6, marginTop: 6 }}>
-                  {[0, 1, 2, 3, 4].map((r) => (
-                    <Chip key={r} label={r === 4 ? '4+' : String(r)} selected={sel.rir === r} onPress={() => s.setRir(sel.rir === r ? null : r)} />
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {/* 休憩タイマー */}
-            {s.rest > 0 && (
-              <View style={{ marginTop: 12, marginHorizontal: 16, borderWidth: hairline, borderColor: color.line, borderRadius: radius.card, backgroundColor: color.surface, paddingVertical: 10, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <View style={{ flex: 1, gap: 6 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <T size={12} c={color.sub}>休憩</T>
-                    <N size={28} w={600} style={{ lineHeight: 28 }}>{mmss(s.rest)}</N>
-                  </View>
-                  <Bar pct={Math.round((s.rest / s.restMax) * 100)} fill={color.text} height={4} />
-                </View>
-                <Pressable accessibilityRole="button" onPress={s.addRest} style={{ height: 44, paddingHorizontal: 10, borderWidth: hairline, borderColor: color.lineStrong, borderRadius: radius.input, alignItems: 'center', justifyContent: 'center' }}>
-                  <T size={12}>＋30秒</T>
-                </Pressable>
-                <Pressable accessibilityRole="button" onPress={s.skipRest} style={{ height: 44, paddingHorizontal: 10, borderWidth: hairline, borderColor: color.lineStrong, borderRadius: radius.input, alignItems: 'center', justifyContent: 'center' }}>
-                  <T size={12}>終了</T>
-                </Pressable>
-              </View>
-            )}
           </>
         ) : (
           <View style={{ padding: 22 }}>
             <T size={13} c={color.sub}>種目を選んで始めましょう。</T>
-            <PrimaryButton label="種目を選ぶ" style={{ marginTop: 12 }} onPress={() => setPicker(true)} />
           </View>
         )}
       </ScrollView>
 
-      <View style={{ paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row', gap: 8 }}>
-        {hasNext && <OutlineButton label="次の種目" onPress={s.nextExercise} style={{ flex: 1 }} />}
-        <PrimaryButton label="トレーニングを完了" onPress={() => s.finishSession()} style={{ flex: 1 }} />
+      {/* スクロールさせない部分：休憩の黒い帯と、主ボタン */}
+      <View style={{ paddingTop: 8 }}>
+        {s.rest > 0 && (
+          <View style={{ marginHorizontal: 14, backgroundColor: REST_BG, borderRadius: 14, paddingTop: 10, paddingHorizontal: 14, paddingBottom: 12, gap: 8 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <T size={13} w={700} c={REST_ACCENT}>休憩</T>
+              <N size={40} w={600} c={REST_TEXT} style={{ lineHeight: 42 }}>{mmss(s.rest)}</N>
+            </View>
+            <View style={{ height: 4, backgroundColor: REST_TRACK, borderRadius: 2, overflow: 'hidden' }}>
+              <View style={{ height: 4, width: `${Math.min(100, Math.round((s.rest / s.restMax) * 100))}%`, backgroundColor: REST_ACCENT }} />
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <RestBtn label="−15秒" onPress={s.subRest} flex={1} />
+              <RestBtn label="+15秒" onPress={s.addRest} flex={1} />
+              <RestBtn label="スキップ" onPress={s.skipRest} flex={1.2} light />
+            </View>
+          </View>
+        )}
+        <View style={{ paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12 }}>
+          <Pressable accessibilityRole="button" onPress={mainAct} style={{ height: 68, borderRadius: 12, backgroundColor: color.text, alignItems: 'center', justifyContent: 'center' }}>
+            <T size={18} w={700} c={color.onText}>{mainLabel}</T>
+          </Pressable>
+        </View>
       </View>
-      <ExercisePicker open={picker} onClose={() => setPicker(false)} onPick={(e) => s.addExerciseToSession(e.id)} />
+      <ExercisePicker open={picker} onClose={() => setPicker(false)} usedIds={ses.ex.map((e) => e.exerciseId)} onPick={(e) => s.addExerciseToSession(e.id)} />
+    </View>
+  );
+}
+
+function RestBtn({ label, onPress, flex, light }: { label: string; onPress: () => void; flex: number; light?: boolean }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={{ flex, height: 46, borderRadius: 8, backgroundColor: light ? REST_TEXT : REST_TRACK, alignItems: 'center', justifyContent: 'center' }}>
+      {light ? <T size={14} w={700} c={REST_BG}>{label}</T> : <N size={17} w={600} c={REST_TEXT}>{label}</N>}
+    </Pressable>
+  );
+}
+
+/** 数字＋単位を中に出した ± ボタン（高さ64） */
+function BigStep({ value, unit, onDown, onUp }: { value: string; unit: string; onDown: () => void; onUp: () => void }) {
+  return (
+    <View style={{ flex: 1, height: 64, flexDirection: 'row', alignItems: 'center', borderWidth: hairline, borderColor: color.lineStrong, borderRadius: 10, backgroundColor: color.surface }}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${unit}を減らす`} onPress={onDown} style={{ width: 48, height: 64, alignItems: 'center', justifyContent: 'center' }}><T size={22}>−</T></Pressable>
+      <View style={{ flex: 1, alignItems: 'center' }}>
+        <N size={28} w={600} style={{ lineHeight: 30 }}>{value}</N>
+        <T size={10} c={color.sub}>{unit}</T>
+      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${unit}を増やす`} onPress={onUp} style={{ width: 48, height: 64, alignItems: 'center', justifyContent: 'center' }}><T size={22}>＋</T></Pressable>
     </View>
   );
 }
 
 function DoneModal({ open, onClose, onMeal, w, median: med }: { open: boolean; onClose: () => void; onMeal: () => void; w: ReturnType<typeof useWeek>; median: number }) {
   const rec = w.todayWorkout;
+  const mealSets = useStore((s) => s.mealSets);
+  const setSessionMemo = useStore((s) => s.setSessionMemo);
+  const [memo, setMemo] = useState('');
+  useEffect(() => setMemo(rec?.memo ?? ''), [rec?.id, open]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!rec) return null;
   const rem = w.remaining;
   const dC = w.today.C - w.plan.days[w.ti].C;
   const restDiff = w.eng.days.slice(w.ti + 1).reduce((a, d, i) => a + d.kcal - w.plan.days[w.ti + 1 + i].kcal, 0);
-  const t = new Date(rec.endedAt);
-  const time = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
   const ratio = (rec.volume / med).toFixed(1);
+  // いちばん重いセット（推定1RMが最大のセットを、重さ × 回数で出す）
+  let heavy: { name: string; kg: number; reps: number } | null = null;
+  let heavyE = -1;
+  for (const e of rec.exercises) for (const x of e.sets) if (estimate1RM(x.kg, x.reps) > heavyE) { heavyE = estimate1RM(x.kg, x.reps); heavy = { name: e.name, kg: x.kg, reps: x.reps }; }
   const stats: [string, string][] = [
     ['ボリュームスコア', `${rec.volume.toFixed(1)}（普段 ${med.toFixed(1)}）`],
-    [rec.best ? `${rec.best.name} 推定1RM` : '推定1RM', rec.best ? `${rec.best.e1rm.toFixed(1)} kg` : '—'],
+    [heavy ? `${heavy.name} いちばん重いセット` : 'いちばん重いセット', heavy ? `${heavy.kg > 0 ? `${heavy.kg}kg × ` : '× '}${heavy.reps}` : '—'],
     ['今日の目標', `${fmt(w.today.kcal)} kcal`],
   ];
+  const quick = mealSets.find((m) => m.slotHint === 'トレ後') ?? null;
+  const save = () => {
+    if (memo !== rec.memo) setSessionMemo(rec.id, memo);
+  };
   return (
-    <Modal visible={open} animationType="slide" onRequestClose={onClose}>
+    <Modal visible={open} animationType="slide" onRequestClose={() => { save(); onClose(); }}>
       <View style={{ flex: 1, backgroundColor: color.bg, paddingTop: 54 }}>
-        <View style={{ paddingHorizontal: 22, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Badge high>完了 {time}</Badge>
-          <T size={12} c={color.sub}>{rec.name}・{rec.doneSets}セット</T>
-        </View>
-        <T size={13} c={color.sub} style={{ paddingHorizontal: 22, marginTop: 24 }}>この後の食事で</T>
-        <View style={{ paddingHorizontal: 22, marginTop: 4, flexDirection: 'row', gap: 22, alignItems: 'flex-end' }}>
-          <View>
-            <T size={12} w={700} c={color.P}>P あと</T>
-            <N size={64} w={600} style={{ lineHeight: 68 }}>{Math.max(0, Math.round(rem.P))}<T size={20}>g</T></N>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 12 }}>
+          <View style={{ paddingHorizontal: 22, paddingTop: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Badge high>完了</Badge>
+            <T size={12} c={color.sub}>{rec.name}・{rec.doneSets}セット</T>
           </View>
-          <View>
-            <T size={12} w={700} c={color.C}>C あと</T>
-            <N size={64} w={600} style={{ lineHeight: 68 }}>{Math.max(0, Math.round(rem.C))}<T size={20}>g</T></N>
+          <T size={13} c={color.sub} style={{ paddingHorizontal: 22, marginTop: 24 }}>この後の食事で</T>
+          {/* P・F・Cの3つを同じ大きさで並べる */}
+          <View style={{ paddingHorizontal: 22, marginTop: 6, flexDirection: 'row', gap: 10 }}>
+            {([['P', rem.P, color.P], ['F', rem.F, color.F], ['C', rem.C, color.C]] as const).map(([k, v, c]) => (
+              <View key={k} style={{ flex: 1, borderTopWidth: 3, borderTopColor: c, paddingTop: 8 }}>
+                <T size={12} w={700} c={color.badgeFg}>{k} あと</T>
+                <N size={52} w={600} style={{ lineHeight: 54 }}>{Math.max(0, Math.round(v))}<T size={18}>g</T></N>
+              </View>
+            ))}
           </View>
-        </View>
-        <T size={12.5} c={color.badgeFg} style={{ paddingHorizontal: 22, marginTop: 12, lineHeight: 21 }}>
-          F あと{Math.max(0, Math.round(rem.F))}g・残り{fmt(Math.max(0, rem.kcal))}kcal（目安）。ボリュームは普段の{ratio}倍。
-          {w.changed || !w.features.linkedTargets ? '' : `今日は予定どおり「${DAY_TYPE_JP[w.today.type]}」のまま。`}
-        </T>
-        {w.changed && (
-          <View style={{ marginHorizontal: 22, marginTop: 14 }}>
-            <Notice>
-              <T size={12.5} w={700} c={color.brandText}>目標を変更</T>　今日を「{DAY_TYPE_JP[w.today.type]}」に変更。今日 C{sign(dC)}{Math.abs(dC)}g、残りの日に {sign(restDiff)}{fmt(Math.abs(restDiff))}kcal を配り直しました。
-            </Notice>
-          </View>
-        )}
-        {!w.features.linkedTargets && (
-          <View style={{ marginHorizontal: 22, marginTop: 14 }}>
-            <Notice tone="plain">無料プランでは、トレーニングの内容で目標は変わりません。日タイプ連動は有料プランで使えます。</Notice>
-          </View>
-        )}
-        <View style={{ marginHorizontal: 22, marginTop: 18, borderTopWidth: hairline, borderTopColor: color.line }}>
-          {stats.map(([k, v]) => (
-            <View key={k} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingVertical: 12, borderBottomWidth: hairline, borderBottomColor: color.line }}>
-              <T size={13} c={color.sub}>{k}</T>
-              <N size={18} w={600}>{v}</N>
+          <T size={12.5} c={color.badgeFg} style={{ paddingHorizontal: 22, marginTop: 12, lineHeight: 21 }}>
+            残り{fmt(Math.max(0, rem.kcal))}kcal。ボリュームは普段の{ratio}倍。
+            {w.changed || !w.features.linkedTargets ? '' : `今日は予定どおり「${DAY_TYPE_JP[w.today.type]}」のまま。`}
+          </T>
+          {w.changed && (
+            <View style={{ marginHorizontal: 22, marginTop: 14 }}>
+              <Notice>
+                <T size={12.5} w={700} c={color.brandText}>目標を変更</T>　今日を「{DAY_TYPE_JP[w.today.type]}」に変更。今日 C{sign(dC)}{Math.abs(dC)}g、残りの日に {sign(restDiff)}{fmt(Math.abs(restDiff))}kcal を配り直しました。
+              </Notice>
             </View>
-          ))}
-        </View>
-        <View style={{ flex: 1 }} />
-        <View style={{ paddingHorizontal: 16, paddingBottom: 34, flexDirection: 'row', gap: 8 }}>
-          <OutlineButton label="閉じる" onPress={onClose} style={{ flex: 1 }} />
-          <PrimaryButton label="トレーニング後の食事を記録" onPress={onMeal} style={{ flex: 1.4 }} />
+          )}
+          {!w.features.linkedTargets && (
+            <View style={{ marginHorizontal: 22, marginTop: 14 }}>
+              <Notice tone="plain">無料プランでは、トレーニングの内容で目標は変わりません。日タイプ連動は有料プランで使えます。</Notice>
+            </View>
+          )}
+          <View style={{ marginHorizontal: 22, marginTop: 18, borderTopWidth: hairline, borderTopColor: color.line }}>
+            {stats.map(([k, v]) => (
+              <View key={k} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, paddingVertical: 12, borderBottomWidth: hairline, borderBottomColor: color.line }}>
+                <T size={13} c={color.sub} numberOfLines={1} style={{ flexShrink: 1 }}>{k}</T>
+                <N size={18} w={600}>{v}</N>
+              </View>
+            ))}
+          </View>
+          <TextInput
+            value={memo}
+            onChangeText={setMemo}
+            onBlur={save}
+            placeholder="メモ（任意）"
+            placeholderTextColor={color.faint}
+            style={{ marginHorizontal: 22, marginTop: 14, height: 44, borderWidth: hairline, borderColor: color.lineStrong, borderRadius: radius.input, backgroundColor: color.surface, paddingHorizontal: 12, fontFamily: font.jp, fontSize: 14, color: color.text }}
+          />
+        </ScrollView>
+        <View style={{ paddingHorizontal: 16, paddingBottom: 34, gap: 8 }}>
+          {quick && (
+            <QuickMeal
+              name={quick.name}
+              onDone={() => { save(); onClose(); }}
+              setId={quick.id}
+            />
+          )}
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Pressable accessibilityRole="button" onPress={() => { save(); onMeal(); }} style={{ flex: 1, height: 52, borderRadius: 10, borderWidth: hairline, borderColor: color.lineStrong, backgroundColor: color.surface, alignItems: 'center', justifyContent: 'center' }}>
+              <T size={14}>{quick ? '他を選ぶ' : '食事を記録'}</T>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => { save(); onClose(); }} style={{ flex: 1, height: 52, borderRadius: 10, borderWidth: hairline, borderColor: color.lineStrong, backgroundColor: color.surface, alignItems: 'center', justifyContent: 'center' }}>
+              <T size={14}>閉じる</T>
+            </Pressable>
+          </View>
         </View>
       </View>
     </Modal>
   );
 }
 
-/** 「予定を変える」の1行。名前とメタ情報は1行に収め、ボタンとは間をあける */
-function PlanRow({ title, meta, action, onPress, last }: { title: string; meta: string; action: string; onPress: () => void; last?: boolean }) {
+/** 「プロテイン＋バナナを追加」：いつものトレーニング後の食事を、間食として1タップで入れる */
+function QuickMeal({ name, setId, onDone }: { name: string; setId: string; onDone: () => void }) {
+  const mealSets = useStore((s) => s.mealSets);
+  const addFromMealSet = useStore((s) => s.addFromMealSet);
   return (
-    <View style={{ minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 14, paddingLeft: 16, paddingRight: 12, borderBottomWidth: last ? 0 : hairline, borderBottomColor: color.line }}>
-      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-        <T size={14} w={500} numberOfLines={1}>{title}</T>
-        <T size={11} c={color.sub} numberOfLines={1}>{meta}</T>
-      </View>
-      <Pressable accessibilityRole="button" onPress={onPress} style={{ minHeight: 44, minWidth: 68, paddingHorizontal: 14, borderWidth: hairline, borderColor: color.text, borderRadius: radius.input, alignItems: 'center', justifyContent: 'center' }}>
-        <T size={12} w={700}>{action}</T>
-      </Pressable>
-    </View>
+    <Pressable
+      accessibilityRole="button"
+      onPress={async () => {
+        const ms = mealSets.find((m) => m.id === setId);
+        if (!ms) return;
+        const foods = await getFoodsByIds(ms.items.map((i) => i.foodId));
+        addFromMealSet(ms, foods, { slot: '間食' });
+        onDone();
+      }}
+      style={{ height: 64, borderRadius: 12, backgroundColor: color.text, alignItems: 'center', justifyContent: 'center', gap: 2 }}
+    >
+      <T size={16} w={700} c={color.onText}>{name}を追加</T>
+      <T size={11.5} c={color.faint}>いつものトレーニング後</T>
+    </Pressable>
   );
 }

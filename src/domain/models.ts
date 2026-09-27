@@ -85,6 +85,10 @@ export interface ExerciseLog {
   coef: number;
   prevKg: number;
   prevReps: number;
+  /** 前回のセットごとの回数（「前回 120 × 5・5・5」の表示用） */
+  prevRepsList?: number[];
+  /** 「+2.5kg」：前回、すべてのセットで目標の回数ができた種目 */
+  tip?: string;
   sets: SetLog[];
 }
 

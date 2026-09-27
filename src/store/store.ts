@@ -177,6 +177,7 @@ interface State {
   tickRest(): void;
   startRest(): void;
   addRest(): void;
+  subRest(): void;
   skipRest(): void;
   setDoneOpen(v: boolean): void;
 
@@ -636,15 +637,19 @@ export const useStore = create<State>()((set, get) => {
         for (let i = sessions.length - 1; i >= 0; i--) {
           const ex = sessions[i].exercises.find((e) => e.exerciseId === exerciseId);
           const done = ex?.sets.filter((x) => x.done);
-          if (done && done.length) return { kg: done[done.length - 1].kg, reps: done[done.length - 1].reps };
+          if (done && done.length) return { kg: done[done.length - 1].kg, reps: done[done.length - 1].reps, repsList: done.map((x) => x.reps) };
         }
         return null;
       };
       const ex: ExerciseLog[] = (tpl?.exercises ?? []).flatMap((te) => {
         const def = exBy.get(te.exerciseId);
         if (!def) return [];
-        const prev = lastOf(te.exerciseId) ?? { kg: te.kg, reps: te.reps };
-        return [{ exerciseId: def.id, name: def.name, part: def.part, coef: def.coef, prevKg: prev.kg, prevReps: prev.reps, sets: Array.from({ length: te.sets }, () => ({ kg: prev.kg, reps: prev.reps, done: false })) }];
+        const last = lastOf(te.exerciseId);
+        const prev = last ?? { kg: te.kg, reps: te.reps, repsList: Array.from({ length: te.sets }, () => te.reps) };
+        // 前回、すべてのセットで目標の回数ができていたら、次は +2.5kg
+        const up = !!last && last.kg > 0 && last.repsList.every((r) => r >= te.reps);
+        const kg = up ? Math.round((prev.kg + 2.5) * 10) / 10 : prev.kg;
+        return [{ exerciseId: def.id, name: def.name, part: def.part, coef: def.coef, prevKg: prev.kg, prevReps: prev.reps, prevRepsList: prev.repsList, tip: up ? '+2.5kg' : '', sets: Array.from({ length: te.sets }, () => ({ kg, reps: prev.reps, done: false })) }];
       });
       set({ doneOpen: false, rest: 0, session: { templateId: tpl?.id ?? null, name: tpl?.name ?? 'フリートレーニング', defaultDayType: tpl?.defaultDayType ?? 'normal', cur: 0, sel: 0, startedAt: Date.now(), ex } });
     },
@@ -745,7 +750,7 @@ export const useStore = create<State>()((set, get) => {
       set((s) => {
         if (!s.session) return s;
         const ses = clone(s.session);
-        ses.ex.push({ exerciseId: def.id, name: def.name, part: def.part, coef: def.coef, prevKg: prev.kg, prevReps: prev.reps, sets: [0, 1, 2].map(() => ({ kg: prev.kg, reps: prev.reps, done: false })) });
+        ses.ex.push({ exerciseId: def.id, name: def.name, part: def.part, coef: def.coef, prevKg: prev.kg, prevReps: prev.reps, prevRepsList: [prev.reps, prev.reps, prev.reps], tip: '', sets: [0, 1, 2].map(() => ({ kg: prev.kg, reps: prev.reps, done: false })) });
         ses.cur = ses.ex.length - 1;
         ses.sel = 0;
         return { session: ses };
@@ -829,7 +834,10 @@ export const useStore = create<State>()((set, get) => {
       } else set({ rest: r - 1 });
     },
     addRest() {
-      set((s) => ({ rest: s.rest + 30, restMax: Math.max(s.restMax, s.rest + 30) }));
+      set((s) => ({ rest: s.rest + 15, restMax: Math.max(s.restMax, s.rest + 15) }));
+    },
+    subRest() {
+      set((s) => ({ rest: Math.max(0, s.rest - 15) }));
     },
     skipRest() {
       clearInterval(restTimer);

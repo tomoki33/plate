@@ -1,7 +1,6 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Notice, OutlineButton, PrimaryButton, T, color, hairline, radius } from '@/design-system';
 import { useNow } from '../components/useNow';
 import { AI_LIMIT_FREE, AI_LIMIT_PAID, REVIEW_WEEKS_FREE, TRIAL_DAYS } from '../domain/entitlement';
@@ -23,7 +22,6 @@ const ROWS: [string, string, string][] = [
 
 export default function Paywall() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const now = useNow();
   const { plan, trialLeft } = usePlan(now);
   const setPaid = useStore((s) => s.setPaid);

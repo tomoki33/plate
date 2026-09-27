@@ -27,7 +27,9 @@ export function ExercisePicker({ open, onClose, onPick, usedIds = [] }: { open: 
       .slice(0, 60);
   }, [exercises, q, part]);
   const name = q.trim();
-  const exact = !!name && exercises.some((e) => fold(e.name) === fold(name));
+  // 名前か別名がぴったり一致する種目があるときは、「新しい種目として作る」を出さない
+  const fname = fold(name);
+  const exact = !!name && exercises.some((e) => fold(e.name) === fname || fold(e.aliases ?? '').split(/\s+/).includes(fname));
 
   const close = () => {
     setQ('');

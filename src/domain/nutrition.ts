@@ -20,7 +20,7 @@ export const ACTIVITY_LEVELS: ActivityLevel[] = [
 ];
 
 /** 保存されている活動係数に、いちばん近い選択肢（以前の版の値でも選択状態を出せるように） */
-export const nearestActivity = (v: number): ActivityLevel => ACTIVITY_LEVELS.reduce((a, b) => (Math.abs(b.value - v) < Math.abs(a.value - v) ? b : a));
+export const nearestActivity = (v: number): ActivityLevel => (v >= 1.7 ? ACTIVITY_LEVELS[2] : v >= 1.5 ? ACTIVITY_LEVELS[1] : ACTIVITY_LEVELS[0]);
 
 export interface Profile {
   sex: Sex;

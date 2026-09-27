@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bmr, checkWarnings, clampPace, correctTdee, defaultPace, initialTdee, paceBounds, paceOptions, weekKcalOf, weightTrend, DEFAULT_PROFILE } from './nutrition';
+import { ACTIVITY_LEVELS, DEFAULT_PROFILE, SPREAD_PRESETS, bmr, checkWarnings, clampPace, coefFromPercents, correctTdee, dailyProtein, defaultPace, initialTdee, matchSpreadPreset, nearestActivity, paceBounds, paceOptions, spreadPercents, weekKcalOf, weightTrend } from './nutrition';
 
 const now = new Date(2026, 8, 26);
 
@@ -106,7 +106,6 @@ describe('TDEEの実データ補正', () => {
   });
 });
 
-import { SPREAD_PRESETS, coefFromPercents, dailyProtein, matchSpreadPreset, spreadPercents } from './nutrition';
 
 describe('日ごとの食べる量', () => {
   it('標準は設計書の初期値（高1.15／オフ0.85）', () => {
@@ -131,5 +130,15 @@ describe('日ごとの食べる量', () => {
   it('1日のたんぱく質 = 体重 × P係数', () => {
     expect(dailyProtein(71.6, 2.2)).toBe(158);
     expect(dailyProtein(70, 2.2)).toBe(154);
+  });
+});
+
+describe('活動量（v2：低い1.4／ふつう1.6／高い1.85）', () => {
+  it('以前の版の値でも、いちばん近い選択肢になる', () => {
+    expect(ACTIVITY_LEVELS.map((a) => a.value)).toEqual([1.4, 1.6, 1.85]);
+    expect(nearestActivity(1.375).value).toBe(1.4);
+    expect(nearestActivity(1.55).value).toBe(1.6);
+    expect(nearestActivity(1.725).value).toBe(1.85);
+    expect(nearestActivity(1.6).label).toBe('ふつう');
   });
 });

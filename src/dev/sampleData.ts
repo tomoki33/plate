@@ -26,7 +26,6 @@ interface Item {
   code: string;
   g: number;
 }
-const my = (key: string) => SEED_MY_FOODS.find((m) => m.key === key)!;
 
 function per100(code: string) {
   const my_ = SEED_MY_FOODS.find((m) => m.key === code);

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { Card, CardRow, InlineStepper, N, Segmented, T, color, hairline, radius } from '@/design-system';
+import { Card, CardRow, InlineStepper, N, Segmented, T, color, hairline } from '@/design-system';
 import { SPREAD_LIMITS, SPREAD_PRESETS, coefFromPercents, dailyProtein, matchSpreadPreset, spreadPercents, type SpreadPreset } from '../domain/nutrition';
 import type { Coef, DayType } from '../domain/types';
 

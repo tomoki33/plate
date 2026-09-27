@@ -13,6 +13,11 @@ const SHORT: Record<string, string> = {
   ラットプルダウン: 'ラットプル',
   ダンベルカール: 'DBカール',
   ダンベルプレス: 'DBプレス',
+  バーベルカール: 'BBカール',
+  トライセプスプッシュダウン: 'プッシュダウン',
+  ハンギングレッグレイズ: 'レッグレイズ',
+  ワンハンドダンベルロウ: 'DBロウ',
+  ナローグリップ懸垂: 'ナロー懸垂',
 };
 
 export const shortExName = (name: string): string => SHORT[name] ?? (name.length > 6 ? name.slice(0, 6) : name);

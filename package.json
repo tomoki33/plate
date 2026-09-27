@@ -43,6 +43,8 @@
     "@types/react": "~19.2.2",
     "babel-preset-expo": "^57.0.13",
     "drizzle-kit": "^0.31.11",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~57.0.2",
     "sharp": "^0.35.4",
     "typescript": "~6.0.3",
     "vitest": "^4.1.11"
@@ -53,7 +55,8 @@
     "ios": "expo start --ios",
     "web": "node scripts/web-dev.mjs",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "expo lint"
   },
   "private": true
 }

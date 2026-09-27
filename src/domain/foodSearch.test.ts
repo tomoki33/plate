@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import foods from '../data/foods.json';
-import { expandQuery, fold, matchesQuery, parseQuantities, POPULAR_FOODS, searchKey } from './foodSearch';
+import { expandQuery, fold, matchesQuery, parseQuantities, POPULAR_FOODS, searchKey, shortName } from './foodSearch';
 
 type Row = [string, string, string, number, number, number, number];
 const rows = foods as Row[];
@@ -75,7 +75,6 @@ describe('文章入力のパース', () => {
   });
 });
 
-import { shortName } from './foodSearch';
 describe('表示名', () => {
   it('［］は中身を残し、先頭の分類は外す', () => {
     expect(shortName('にわとり ［若どり・主品目］ むね 皮なし 生')).toBe('にわとり 若どり・主品目 むね 皮なし 生');

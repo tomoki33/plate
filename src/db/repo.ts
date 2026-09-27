@@ -78,7 +78,7 @@ export async function loadAll(): Promise<LoadedData> {
     createdAt: m.createdAt,
   }));
 
-  const exercises: Exercise[] = (await db.select().from(s.exercise).where(alive(s.exercise))).map((e) => ({ id: e.id, name: e.name, part: e.part, coef: e.coef, isCustom: e.isCustom }));
+  const exercises: Exercise[] = (await db.select().from(s.exercise).where(alive(s.exercise))).map((e) => ({ id: e.id, name: e.name, part: e.part, coef: e.coef, isCustom: e.isCustom, aliases: e.aliases }));
   const templates: WorkoutTemplate[] = (await db.select().from(s.workoutTemplate).where(alive(s.workoutTemplate)).orderBy(s.workoutTemplate.sortOrder)).map((t) => ({
     id: t.id,
     name: t.name,
@@ -114,6 +114,7 @@ export async function loadAll(): Promise<LoadedData> {
       dayType: r.dayType,
       doneSets: exs.reduce((a, e) => a + e.sets.length, 0),
       best: bestSet(exs),
+      memo: r.memo,
       exercises: exs,
     };
   });
@@ -303,8 +304,8 @@ export async function deleteMealSet(id: string, now = Date.now()) {
 export async function saveExercise(e: Exercise, now = Date.now()) {
   await db
     .insert(s.exercise)
-    .values({ id: e.id, name: e.name, part: e.part, coef: e.coef, isCustom: e.isCustom, updatedAt: now })
-    .onConflictDoUpdate({ target: s.exercise.id, set: { name: e.name, part: e.part, coef: e.coef, deletedAt: null, updatedAt: now } });
+    .values({ id: e.id, name: e.name, part: e.part, coef: e.coef, isCustom: e.isCustom, aliases: e.aliases, updatedAt: now })
+    .onConflictDoUpdate({ target: s.exercise.id, set: { name: e.name, part: e.part, coef: e.coef, aliases: e.aliases, deletedAt: null, updatedAt: now } });
 }
 
 export async function saveTemplate(t: WorkoutTemplate, now = Date.now()) {
@@ -328,7 +329,7 @@ export async function saveWeekPlan(plan: (string | null)[], now = Date.now()) {
 }
 
 export async function saveSession(rec: SessionRecord, setIds: string[], now = Date.now()) {
-  await db.insert(s.workoutSession).values({ id: rec.id, date: rec.date, templateId: rec.templateId, name: rec.name, startedAt: rec.startedAt, endedAt: rec.endedAt, volumeScore: rec.volume, dayType: rec.dayType, updatedAt: now });
+  await db.insert(s.workoutSession).values({ id: rec.id, date: rec.date, templateId: rec.templateId, name: rec.name, startedAt: rec.startedAt, endedAt: rec.endedAt, volumeScore: rec.volume, dayType: rec.dayType, memo: rec.memo, updatedAt: now });
   let order = 0;
   const rows = rec.exercises.flatMap((e) =>
     e.sets
@@ -336,6 +337,10 @@ export async function saveSession(rec: SessionRecord, setIds: string[], now = Da
       .map((st) => ({ id: setIds[order] ?? `${rec.id}_${order}`, sessionId: rec.id, exerciseId: e.exerciseId, weightKg: st.kg, reps: st.reps, rir: st.rir ?? null, order: order++, updatedAt: now })),
   );
   if (rows.length) await db.insert(s.workoutSet).values(rows);
+}
+
+export async function setSessionMemo(id: string, memo: string, now = Date.now()) {
+  await db.update(s.workoutSession).set({ memo, updatedAt: now }).where(eq(s.workoutSession.id, id));
 }
 
 export async function deleteSession(id: string, now = Date.now()) {

@@ -161,3 +161,36 @@ export const SEED_TEMPLATES: SeedTemplate[] = [
 
 /** 初期の週間スケジュール（月〜日）。null はオフ */
 export const SEED_WEEK_PLAN: (string | null)[] = ['tpl_chest', null, 'tpl_legs', null, 'tpl_back', 'tpl_arms', null];
+
+/** 種目の別名（検索用）。id は `ex_<key>` */
+export const SEED_ALIASES: Record<string, string> = {
+  bench: 'ベンチ BP',
+  incline_bench: 'インクライン',
+  db_press: 'DBプレス',
+  incline_db: 'インクライン DB',
+  chest_press: 'マシン',
+  db_fly: 'フライ',
+  cable_cross: 'ケーブル',
+  pushup: '腕立て伏せ 腕立て',
+  deadlift: 'デッド DL',
+  pullup: 'チンニング プルアップ',
+  lat_pulldown: 'ラットプル',
+  bent_row: 'ロウ',
+  db_row: 'DBロウ',
+  seated_row: 'ケーブルロウ',
+  squat: 'SQ',
+  bulgarian: 'BSS',
+  rdl: 'RDL',
+  leg_curl: 'カール',
+  leg_extension: 'エクステ',
+  hip_thrust: 'ヒップ',
+  calf_raise: 'カーフ',
+  shoulder_press: 'DB',
+  ohp: 'OHP オーバーヘッドプレス',
+  db_curl: 'DBカール',
+  pushdown: 'プレスダウン プッシュダウン',
+  close_bench: 'ナロー',
+  ab_roller: '腹筋ローラー',
+  t_bar_row: 'Tバー',
+  face_pull: 'フェイスプル',
+};

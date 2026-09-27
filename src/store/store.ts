@@ -8,6 +8,7 @@ import type { Exercise, ExerciseLog, FoodItem, InputType, MealEntry, MealSet, Pr
 import { searchKey } from '../domain/foodSearch';
 import { bestSet, decideDayType, median, volumeScore, DEFAULT_MEDIAN_VOLUME } from '../domain/training';
 import type { Coef, DayType, Pfc } from '../domain/types';
+import { signOut } from '../services/supabase';
 import { scaleMealEntry } from '../domain/meals';
 import { uuid } from '../lib/id';
 
@@ -20,6 +21,9 @@ export interface Session {
   startedAt: number;
   ex: ExerciseLog[];
 }
+
+export type UsualSlot = '朝' | '昼' | '夜';
+export const USUAL_SLOTS: UsualSlot[] = ['朝', '昼', '夜'];
 
 export interface Toast {
   id: number;
@@ -91,6 +95,8 @@ interface State {
   healthSync: boolean;
   /** 開発用：サンプルを自動で入れ済みか */
   sampleInserted: boolean;
+  /** 「いつも通り」で入れる食事（時間帯 → マイセットのid。null は「なし」） */
+  usualMeals: Record<UsualSlot, string | null>;
 
   session: Session | null;
   rest: number;
@@ -118,7 +124,10 @@ interface State {
   /** 食事（同じ操作で追加したまとまり）の量と時間帯を直す。量は、その行の栄養を比例で計算し直す */
   updateMealGroup(groupId: string, patch: { slot?: Slot; grams?: Record<string, number> }): void;
   removeMealGroup(groupId: string): void;
-  addFromMealSet(set: MealSet, foods: FoodItem[], opts?: { date?: string; slot?: Slot }): void;
+  addFromMealSet(set: MealSet, foods: FoodItem[], opts?: { date?: string; slot?: Slot }): string | null;
+  /** 設定の「いつもの食事」を入れる。朝と昼 → 夜の順に、まだ記録していない時間帯の分だけ */
+  addUsualMeals(date: string): Promise<void>;
+  setUsualMeal(slot: UsualSlot, mealSetId: string | null): void;
   saveMealSet(name: string, items: { foodId: string; g: number }[], slotHint?: string | null): void;
   deleteMealSet(id: string): void;
   saveMyFood(f: { id?: string; name: string; kcal: number; p: number; f: number; c: number; defaultG?: number | null; unitG?: number | null }): string;
@@ -162,6 +171,9 @@ interface State {
   addExerciseToSession(exerciseId: string): void;
   nextExercise(): void;
   finishSession(): SessionRecord | null;
+  /** 間違えて完了したとき：今日の最後のトレーニングを記録中に戻す */
+  resumeSession(): void;
+  setSessionMemo(id: string, memo: string): void;
   tickRest(): void;
   startRest(): void;
   addRest(): void;
@@ -179,6 +191,8 @@ interface State {
   showToast(text: string, undo?: () => void): void;
   hideToast(): void;
   eraseAllData(): Promise<void>;
+  /** ログアウト。wipe なら、この端末の記録も消す。ログイン画面へ戻れるよう、「ログインせずに始める」の選択は外す */
+  logout(wipe: boolean): Promise<void>;
 }
 
 export const useStore = create<State>()((set, get) => {
@@ -210,6 +224,7 @@ export const useStore = create<State>()((set, get) => {
     paceAnswers: {},
     healthSync: false,
     sampleInserted: false,
+    usualMeals: { 朝: null, 昼: null, 夜: null },
     session: null,
     rest: 0,
     restMax: 120,
@@ -253,6 +268,13 @@ export const useStore = create<State>()((set, get) => {
         paceAnswers: d.paceAnswers,
         healthSync: d.kv.health_sync === '1',
         sampleInserted: d.kv.sample_inserted === '1',
+        usualMeals: Object.fromEntries(
+          USUAL_SLOTS.map((sl) => {
+            const v = d.kv[`usual:${sl}`];
+            // 未設定なら、その時間帯向けのマイセットを初期値にする（「なし」を選んだら空文字で覚えている）
+            return [sl, v === undefined ? (d.mealSets.find((m) => m.slotHint === sl)?.id ?? null) : v || null];
+          }),
+        ) as Record<UsualSlot, string | null>,
         lastBackupAt: d.kv.last_backup_at ? Number(d.kv.last_backup_at) : null,
       });
     },
@@ -416,11 +438,38 @@ export const useStore = create<State>()((set, get) => {
         const k = it.g / 100;
         return [{ foodId: f.id, name: f.name, grams: it.g, kcal: Math.round(f.kcal * k), P: round1(f.p * k), F: round1(f.f * k), C: round1(f.c * k) }];
       });
-      if (!items.length) return;
-      get().addMealItems(ms.name, items, { mealSetId: ms.id, ...opts });
+      if (!items.length) return null;
+      const groupId = get().addMealItems(ms.name, items, { mealSetId: ms.id, ...opts });
       const next: MealSet = { ...ms, useCount: ms.useCount + 1, lastUsedAt: Date.now() };
       set((s) => ({ mealSets: s.mealSets.map((m) => (m.id === ms.id ? next : m)) }));
       persist(repo.saveMealSet(next));
+      return groupId;
+    },
+
+    async addUsualMeals(date) {
+      const { usualMeals, mealSets, meals } = get();
+      const has = (sl: Slot) => meals.some((m) => m.date === date && m.slot === sl);
+      const configured = USUAL_SLOTS.filter((sl) => usualMeals[sl] && mealSets.some((m) => m.id === usualMeals[sl]));
+      if (!configured.length) return get().showToast('設定の「いつもの食事」を選ぶと、ここから一度に入れられます');
+      const ok = (sl: UsualSlot) => configured.includes(sl) && !has(sl);
+      const add: UsualSlot[] = ok('朝') || ok('昼') ? (['朝', '昼'] as UsualSlot[]).filter(ok) : ok('夜') ? ['夜'] : [];
+      if (!add.length) return get().showToast('いつも通りの分は記録済み');
+      const sets = add.map((sl) => mealSets.find((m) => m.id === usualMeals[sl])!);
+      const foods = await repo.getFoodsByIds([...new Set(sets.flatMap((m) => m.items.map((i) => i.foodId)))]);
+      const ids: string[] = [];
+      add.forEach((sl, i) => {
+        const id = get().addFromMealSet(sets[i], foods, { date, slot: sl });
+        if (id) ids.push(id);
+      });
+      if (!ids.length) return;
+      get().showToast(`${add.join('・')}をいつも通りで記録`, () => {
+        set((s) => ({ meals: s.meals.filter((m) => !ids.includes(m.groupId)) }));
+        ids.forEach((id) => persist(repo.softDeleteMealGroup(id)));
+      });
+    },
+    setUsualMeal(slot, mealSetId) {
+      set((s) => ({ usualMeals: { ...s.usualMeals, [slot]: mealSetId } }));
+      persist(repo.setKv(`usual:${slot}`, mealSetId ?? ''));
     },
 
     saveMealSet(name, items, slotHint = null) {
@@ -565,7 +614,7 @@ export const useStore = create<State>()((set, get) => {
       persist(repo.deleteTemplate(id));
     },
     addCustomExercise(name, part) {
-      const ex: Exercise = { id: uuid(), name, part, coef: { 脚: 1.5, 背中: 1.2, 胸: 1.0, 肩: 1.0, 腕: 0.6, 腹: 0.6 }[part], isCustom: true };
+      const ex: Exercise = { id: uuid(), name, part, coef: { 脚: 1.5, 背中: 1.2, 胸: 1.0, 肩: 1.0, 腕: 0.6, 腹: 0.6 }[part], isCustom: true, aliases: '自分で作成' };
       set((s) => ({ exercises: [...s.exercises, ex] }));
       persist(repo.saveExercise(ex));
       return ex.id;
@@ -717,9 +766,14 @@ export const useStore = create<State>()((set, get) => {
       }
       const now = new Date();
       const volume = volumeScore(doneEx);
+      const date = dateKey(now);
       // 本人の中央値：記録が3回未満のあいだは標準値を使う
       const med = sessions.length >= 3 ? median(sessions.map((w) => w.volume)) : DEFAULT_MEDIAN_VOLUME;
-      const dayType = decideDayType(session.defaultDayType, volume, med);
+      // 1日に複数回のトレーニングは、その日のボリュームを合わせて日タイプを決める（どれかが「高」のメニューなら高）
+      const sameDay = sessions.filter((x) => x.date === date);
+      const dayVolume = volume + sameDay.reduce((a, x) => a + x.volume, 0);
+      const anyHigh = session.defaultDayType === 'high' || sameDay.some((x) => x.templateId && get().templates.find((t) => t.id === x.templateId)?.defaultDayType === 'high');
+      const dayType = decideDayType(anyHigh ? 'high' : 'normal', dayVolume, med);
       const rec: SessionRecord = {
         id: uuid(),
         date: dateKey(now),
@@ -731,12 +785,36 @@ export const useStore = create<State>()((set, get) => {
         dayType,
         doneSets: doneEx.reduce((a, e) => a + e.sets.length, 0),
         best: bestSet(doneEx),
+        memo: '',
         exercises: doneEx,
       };
       set((s) => ({ session: null, rest: 0, doneOpen: true, sessions: [...s.sessions, rec], dayTypes: { ...s.dayTypes, [rec.date]: dayType } }));
       persist(repo.saveSession(rec, rec.exercises.flatMap((e) => e.sets.map(() => uuid()))));
       persist(repo.setKv(`dt:${rec.date}`, dayType));
       return rec;
+    },
+    resumeSession() {
+      const { sessions, exercises } = get();
+      const today = dateKey(new Date());
+      const rec = sessions.filter((x) => x.date === today).slice(-1)[0];
+      if (!rec) return;
+      clearInterval(restTimer);
+      const tpl = get().templates.find((t) => t.id === rec.templateId);
+      const remaining = sessions.filter((x) => x.id !== rec.id);
+      // 記録を取り消して、セッションとして開き直す。もう一度完了したら、目標を計算し直す
+      const ex: ExerciseLog[] = rec.exercises.map((e) => ({ ...e, coef: exercises.find((d) => d.id === e.exerciseId)?.coef ?? e.coef, sets: e.sets.map((x) => ({ ...x, done: true })) }));
+      const sameDay = remaining.filter((x) => x.date === today);
+      const dayTypes = { ...get().dayTypes };
+      if (sameDay.length) dayTypes[today] = sameDay[sameDay.length - 1].dayType;
+      else delete dayTypes[today];
+      set({ sessions: remaining, dayTypes, session: { templateId: rec.templateId, name: rec.name, defaultDayType: tpl?.defaultDayType ?? (rec.dayType === 'high' ? 'high' : 'normal'), cur: 0, sel: 0, startedAt: rec.startedAt, ex }, doneOpen: false, rest: 0 });
+      persist(repo.deleteSession(rec.id));
+      persist(sameDay.length ? repo.setKv(`dt:${today}`, dayTypes[today]) : repo.deleteKv(`dt:${today}`));
+      get().showToast('続きから記録します');
+    },
+    setSessionMemo(id, memo) {
+      set((s) => ({ sessions: s.sessions.map((x) => (x.id === id ? { ...x, memo } : x)) }));
+      persist(repo.setSessionMemo(id, memo));
     },
     startRest() {
       clearInterval(restTimer);
@@ -796,6 +874,13 @@ export const useStore = create<State>()((set, get) => {
       await seedIfNeeded();
       set({ session: null, rest: 0, doneOpen: false, toast: null });
       await get().reload();
+    },
+
+    async logout(wipe) {
+      await signOut().catch(() => {});
+      set({ account: null, loginSkipped: false });
+      persist(repo.deleteKv('login_skipped'));
+      if (wipe) await get().eraseAllData();
     },
   };
 });

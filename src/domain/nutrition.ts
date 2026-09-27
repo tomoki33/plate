@@ -14,10 +14,13 @@ export interface ActivityLevel {
   note: string;
 }
 export const ACTIVITY_LEVELS: ActivityLevel[] = [
-  { value: 1.375, label: '低め', note: '週1〜2回の運動、デスクワーク中心' },
-  { value: 1.55, label: '標準', note: '週3〜5回のトレーニング、立ち仕事も少し' },
-  { value: 1.725, label: '高め', note: '週5回以上のトレーニング、体を使う仕事' },
+  { value: 1.4, label: '低い', note: '週0〜1回' },
+  { value: 1.6, label: 'ふつう', note: '週2〜3回' },
+  { value: 1.85, label: '高い', note: '週4回以上' },
 ];
+
+/** 保存されている活動係数に、いちばん近い選択肢（以前の版の値でも選択状態を出せるように） */
+export const nearestActivity = (v: number): ActivityLevel => ACTIVITY_LEVELS.reduce((a, b) => (Math.abs(b.value - v) < Math.abs(a.value - v) ? b : a));
 
 export interface Profile {
   sex: Sex;
@@ -29,7 +32,7 @@ export interface Profile {
   pace: number;
 }
 
-export const DEFAULT_PROFILE: Profile = { sex: 'male', birthYear: 1997, heightCm: 172, activity: 1.55, goal: 'cut', pace: -0.35 };
+export const DEFAULT_PROFILE: Profile = { sex: 'male', birthYear: 1997, heightCm: 172, activity: 1.6, goal: 'cut', pace: -0.35 };
 
 export const ageOf = (birthYear: number, now: Date) => Math.max(15, now.getFullYear() - birthYear);
 

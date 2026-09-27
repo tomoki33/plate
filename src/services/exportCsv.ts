@@ -19,7 +19,7 @@ export async function buildCsvFiles(): Promise<{ name: string; csv: string }[]> 
     { name: 'plate_body.csv', csv: toCsv(['日付', '体重kg', '体脂肪%', '出所'], body.map((b) => [b.date, b.weightKg, b.bodyFatPct ?? '', b.source === 'healthkit' ? 'ヘルスケア' : '手入力'])) },
     {
       name: 'plate_meals.csv',
-      csv: toCsv(['日付', '時間帯', 'まとまり', '食品', 'g', 'kcal', 'P', 'F', 'C', '入力方法', 'AI推定'], meals.map((m) => [m.date, m.slot, m.groupName, m.name, m.grams ?? '', m.kcal, m.p, m.f, m.c, { set: 'マイセット', search: '検索', text: '文章', photo: '写真' }[m.inputType] ?? '', m.ai ? 'はい' : ''])),
+      csv: toCsv(['日付', '時間帯', 'まとまり', '食品', 'g', 'kcal', 'P', 'F', 'C', '入力方法', 'AI推定'], meals.map((m) => [m.date, m.slot, m.groupName, m.name, m.grams ?? '', m.kcal, m.p, m.f, m.c, { set: 'マイセット', search: '検索', text: '文章', photo: '写真', rough: 'ざっくり' }[m.inputType] ?? '', m.ai ? 'はい' : ''])),
     },
     {
       name: 'plate_workouts.csv',

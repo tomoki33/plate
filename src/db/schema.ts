@@ -54,6 +54,8 @@ export const exercise = sqliteTable('exercise', {
   /** 部位係数 */
   coef: real('coef').notNull(),
   isCustom: integer('is_custom', { mode: 'boolean' }).notNull().default(false),
+  /** 検索用の別名（BSS・RDL・OHP など。空白区切り） */
+  aliases: text('aliases').notNull().default(''),
 });
 
 export const workoutTemplate = sqliteTable('workout_template', {
@@ -90,6 +92,8 @@ export const workoutSession = sqliteTable(
     endedAt: integer('ended_at').notNull(),
     volumeScore: real('volume_score').notNull(),
     dayType: text('day_type', { enum: ['high', 'normal', 'off'] }).notNull(),
+    /** 完了画面で書くメモ（任意） */
+    memo: text('memo').notNull().default(''),
   },
   (t) => [index('workout_session_date_idx').on(t.date)],
 );
@@ -161,7 +165,7 @@ export const mealEntry = sqliteTable(
     /** 写真で記録した食事の写真（アプリ内に保存したファイル） */
     photoUri: text('photo_uri'),
     /** どの入力方法で記録したか（マイセット・検索・文章・写真） */
-    inputType: text('input_type', { enum: ['set', 'search', 'text', 'photo'] }).notNull().default('search'),
+    inputType: text('input_type', { enum: ['set', 'search', 'text', 'photo', 'rough'] }).notNull().default('search'),
     createdAt: integer('created_at').notNull(),
   },
   (t) => [index('meal_entry_date_idx').on(t.date)],

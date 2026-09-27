@@ -148,7 +148,7 @@ export async function insertSampleData(now = new Date()): Promise<void> {
     const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 18).getTime();
     const rec: SessionRecord = {
       id: uuid(), date: dateKey(d), templateId, name: tpl.name, startedAt: start, endedAt: start + 58 * 60_000,
-      volume, dayType, doneSets: logs.reduce((a, e) => a + e.sets.length, 0), best: bestSet(logs), exercises: logs,
+      volume, dayType, doneSets: logs.reduce((a, e) => a + e.sets.length, 0), best: bestSet(logs), memo: '', exercises: logs,
     };
     await repo.saveSession(rec, logs.flatMap((l) => l.sets.map(() => uuid())));
     dayTypes[rec.date] = dayType;
@@ -166,7 +166,7 @@ export async function insertSampleData(now = new Date()): Promise<void> {
 /** 初回起動から、サンプルつきで始める（開発用）。オンボーディングを済ませてから、サンプルを入れる */
 export async function startWithSampleData(): Promise<void> {
   useStore.getState().skipLogin();
-  useStore.getState().completeOnboarding({ sex: 'male', birthYear: 1995, heightCm: 172, activity: 1.55, goal: 'cut', pace: -0.47, weight: 71.5, goalWeight: 69 });
+  useStore.getState().completeOnboarding({ sex: 'male', birthYear: 1995, heightCm: 172, activity: 1.6, goal: 'cut', pace: -0.47, weight: 71.5, goalWeight: 69 });
   await new Promise((r) => setTimeout(r, 300)); // 書き込みが終わるのを待つ
   await insertSampleData();
 }

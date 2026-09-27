@@ -10,6 +10,7 @@ const mk = (date: string, kg: number, reps = 5): SessionRecord => ({
   startedAt: 0,
   endedAt: 0,
   volume: 1,
+  memo: '',
   dayType: 'normal',
   doneSets: 1,
   best: null,

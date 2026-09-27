@@ -15,6 +15,13 @@
       "when": 1790400931769,
       "tag": "0001_slimy_king_cobra",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790487283625,
+      "tag": "0002_aspiring_black_bird",
+      "breakpoints": true
     }
   ]
 }

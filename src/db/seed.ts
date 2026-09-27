@@ -1,6 +1,6 @@
 import { count, eq } from 'drizzle-orm';
 import foodsJson from '../data/foods.json';
-import { SEED_EXERCISES, SEED_TEMPLATES, SEED_WEEK_PLAN } from '../domain/defaults';
+import { SEED_ALIASES, SEED_EXERCISES, SEED_TEMPLATES, SEED_WEEK_PLAN } from '../domain/defaults';
 import { MY_FOOD_ALIASES, POPULAR_BY_CODE, SEED_MY_FOODS, searchKey } from '../domain/foodSearch';
 import { DEFAULT_PROFILE, defaultPk } from '../domain/nutrition';
 import { PART_COEF } from '../domain/training';
@@ -10,7 +10,7 @@ import * as s from './schema';
 type FoodRow = [string, string, string, number, number, number, number];
 
 /** 初期データの版。上げると、起動時に足りないものだけ追加する（ユーザーの編集は上書きしない） */
-const SEED_VERSION = 2;
+const SEED_VERSION = 3;
 
 const chunk = <T,>(xs: T[], n: number): T[][] => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
 
@@ -67,8 +67,10 @@ export async function seedIfNeeded(now = Date.now()): Promise<void> {
   // 種目・テンプレート・週間スケジュール
   await db
     .insert(s.exercise)
-    .values(SEED_EXERCISES.map((e) => ({ id: e.id, name: e.name, part: e.part, coef: PART_COEF[e.part], isCustom: false, updatedAt: now })))
+    .values(SEED_EXERCISES.map((e) => ({ id: e.id, name: e.name, part: e.part, coef: PART_COEF[e.part], isCustom: false, aliases: SEED_ALIASES[e.id.replace(/^ex_/, '')] ?? '', updatedAt: now })))
     .onConflictDoNothing();
+  // 既存の端末にも、別名（BSS・RDL など）を入れる
+  for (const [key, aliases] of Object.entries(SEED_ALIASES)) await db.update(s.exercise).set({ aliases }).where(eq(s.exercise.id, `ex_${key}`));
   await db
     .insert(s.workoutTemplate)
     .values(SEED_TEMPLATES.map((t, i) => ({ id: t.id, name: t.name, exercises: t.exercises, defaultDayType: t.defaultDayType, sortOrder: i, updatedAt: now })))

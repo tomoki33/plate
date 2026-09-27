@@ -16,7 +16,7 @@ describe('TDEEと週合計', () => {
   });
   it('初期TDEE = BMR × 活動係数', () => {
     const p = { ...DEFAULT_PROFILE };
-    expect(initialTdee(p, 70, now)).toBeCloseTo(bmr(p, 70, 29) * 1.55);
+    expect(initialTdee(p, 70, now)).toBeCloseTo(bmr(p, 70, 29) * 1.6);
   });
 });
 

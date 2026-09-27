@@ -9,6 +9,8 @@ export interface Exercise {
   /** 部位係数（ボリュームスコアに使う） */
   coef: number;
   isCustom: boolean;
+  /** 検索用の別名（BSS・RDL・OHP など。空白区切り） */
+  aliases: string;
 }
 
 export interface TemplateExercise {
@@ -50,7 +52,7 @@ export interface MealSet {
 }
 
 export type Slot = '朝' | '昼' | '間食' | '夜';
-export type InputType = 'set' | 'search' | 'text' | 'photo';
+export type InputType = 'set' | 'search' | 'text' | 'photo' | 'rough';
 
 /** 記録時の値をコピーして持つ（食品データを後で直しても過去の記録は変わらない） */
 export interface MealEntry extends Pfc {
@@ -97,6 +99,8 @@ export interface SessionRecord {
   dayType: DayType;
   doneSets: number;
   best: { name: string; e1rm: number } | null;
+  /** 完了画面のメモ */
+  memo: string;
   /** 完了したセットだけ */
   exercises: ExerciseLog[];
 }

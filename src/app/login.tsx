@@ -23,6 +23,7 @@ type Step = 'start' | 'email' | 'code';
  */
 export default function Login() {
   const router = useRouter();
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace('/'));
   const insets = useSafeAreaInsets();
   const onboarded = useStore((s) => s.profile.onboarded);
   const skipLogin = useStore((s) => s.skipLogin);
@@ -49,7 +50,7 @@ export default function Login() {
     if (!r.ok) return setError(r.error ?? null);
     setError(null);
     // 設定から開いたときは戻る。初回は、ログイン状態が変わると自動でオンボーディングへ進む
-    if (onboarded) router.back();
+    if (onboarded) goBack();
   };
 
   const run = async (fn: () => Promise<AuthResult>) => {
@@ -120,7 +121,7 @@ export default function Login() {
           </View>
           <Pressable
             accessibilityRole="button"
-            onPress={() => (onboarded ? router.back() : skipLogin())}
+            onPress={() => (onboarded ? goBack() : skipLogin())}
             style={{ height: 44, marginTop: 14, alignItems: 'center', justifyContent: 'center' }}
           >
             <T size={13} c={color.badgeFg} style={{ textDecorationLine: 'underline' }}>{onboarded ? '閉じる' : 'ログインせずに始める'}</T>

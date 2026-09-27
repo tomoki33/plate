@@ -29,7 +29,7 @@ export default function Onboarding() {
   const [birthYear, setBirthYear] = useState(1995);
   const [heightCm, setHeightCm] = useState(172);
   const [weight, setWeight] = useState(70);
-  const [activity, setActivity] = useState(1.55);
+  const [activity, setActivity] = useState(1.6);
   const [goal, setGoal] = useState<Goal>('cut');
   const [pace, setPace] = useState(defaultPace('cut', 70));
   const [goalWeight, setGoalWeight] = useState<number | null>(null);

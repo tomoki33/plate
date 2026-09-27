@@ -45,6 +45,6 @@ export function StepButton({ label, onPress, size = 44, filled }: { label: strin
 }
 
 const s = StyleSheet.create({
-  primary: { height: 52, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center' },
-  outline: { height: 52, borderRadius: radius.button, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  primary: { height: 56, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center' },
+  outline: { height: 56, borderRadius: radius.button, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 });

@@ -19,9 +19,10 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: color.text,
         tabBarInactiveTintColor: color.sub,
-        tabBarStyle: { backgroundColor: color.surface, borderTopWidth: hairline, borderTopColor: color.line, height: 62 + insets.bottom, paddingTop: 6, elevation: 0, shadowOpacity: 0 },
-        tabBarItemStyle: { height: 52, paddingVertical: 0 },
-        tabBarLabelStyle: { fontSize: 10.5, lineHeight: 14, marginTop: 0, marginBottom: 2, fontFamily: font.jp500 },
+        tabBarStyle: { backgroundColor: color.surface, borderTopWidth: hairline, borderTopColor: color.line, height: 66 + insets.bottom, paddingTop: 8, paddingBottom: insets.bottom, elevation: 0, shadowOpacity: 0 },
+        // 各タブの高さは58、アイコンは26（v2）
+        tabBarItemStyle: { height: 58, paddingVertical: 0 },
+        tabBarLabelStyle: { fontSize: 11, lineHeight: 14, marginTop: 2, marginBottom: 0, fontFamily: font.jp500 },
       }}
     >
       {TABS.map((t) => (

@@ -12,7 +12,8 @@ import { accessToken } from '../services/supabase';
 import { useStore, type MealItemInput } from '../store/store';
 import { CameraIcon, PhotoIcon } from './AuthIcons';
 
-type Mode = 0 | 1 | 2;
+/** 0 マイセット / 1 検索 / 2 AI / 3 ざっくり（表示の順は マイセット・検索・ざっくり・AI） */
+type Mode = 0 | 1 | 2 | 3;
 
 interface Props {
   open: boolean;
@@ -60,9 +61,12 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
   const saveMyFood = useStore((s) => s.saveMyFood);
   const consumeAi = useStore((s) => s.consumeAi);
   const mealSets = useStore((s) => s.mealSets);
+  const allMeals = useStore((s) => s.meals);
   const aiUsed = useStore((s) => s.aiUsed[todayKey] ?? 0);
 
   const [mode, setMode] = useState<Mode>(initialMode);
+  // ざっくり：時間帯（初期値は次の時間帯）・kcal・Pの量（少なめ15%／普通25%／多め35%）
+  const [rough, setRough] = useState<{ slot: Slot | null; kcal: number; p: 0 | 1 | 2 }>({ slot: null, kcal: 600, p: 1 });
   const [slot, setSlot] = useState<Slot>(slotProp);
   const [slotOpen, setSlotOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -87,6 +91,7 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
       setSlot(slotProp);
       setSlotOpen(false);
       setMode(initialMode);
+      setRough((r) => ({ ...r, slot: null }));
       setGram(null);
       setManual(false);
       setQuery('');
@@ -138,7 +143,7 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
     getFoodsByIds(ids).then((fs) => setSetFoods(Object.fromEntries(fs.map((f) => [f.id, f]))));
   }, [open, mealSets]);
 
-  const finish = (name: string, items: MealItemInput[], opts: { ai?: boolean; inputType?: 'search' | 'text' | 'photo'; photoUri?: string | null } = {}) => {
+  const finish = (name: string, items: MealItemInput[], opts: { ai?: boolean; inputType?: 'search' | 'text' | 'photo' | 'rough'; photoUri?: string | null; slot?: Slot } = {}) => {
     addMealItems(name, items, { date, slot, ...opts });
     setGram(null);
     setAiRows(null);
@@ -204,18 +209,34 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
     finish(name, aiItems, { ai: true, inputType: photo ? 'photo' : 'text', photoUri: savedUri });
   };
 
-  const modeLabels = ['マイセット', '検索', 'AI（写真・文章）'];
+  const modeOptions: { value: Mode; label: string }[] = [
+    { value: 0, label: 'マイセット' },
+    { value: 1, label: '検索' },
+    { value: 3, label: 'ざっくり' },
+    { value: 2, label: 'AI' },
+  ];
+
+  // ざっくり：次の時間帯＝まだ記録していない、朝 → 昼 → 夜
+  const has = (sl: Slot) => allMeals.some((m) => m.date === date && m.slot === sl);
+  const nextSlot: Slot = !has('朝') ? '朝' : !has('昼') ? '昼' : '夜';
+  const rSlot: Slot = rough.slot ?? nextSlot;
+  const rP = Math.round((rough.kcal * [0.15, 0.25, 0.35][rough.p]) / 4);
+  const rF = Math.round((rough.kcal * 0.25) / 9);
+  const rC = Math.max(0, Math.round((rough.kcal - rP * 4 - rF * 9) / 4));
 
   return (
     <>
       <Sheet visible={open && !aiRows} onClose={onClose}>
         <View style={{ paddingHorizontal: 18, paddingTop: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <Pressable accessibilityRole="button" accessibilityLabel="時間帯を変える" onPress={() => setSlotOpen(!slotOpen)} style={{ flexShrink: 1 }}>
-            <T size={17} w={900} numberOfLines={1}>{dateLabel ? `${dateLabel} ` : ''}{SLOT_LABEL[slot]}に追加 <T size={12} c={color.sub}>{slotOpen ? '˄' : '˅'}</T></T>
-          </Pressable>
+          <T size={17} w={900} numberOfLines={1} style={{ flexShrink: 1 }}>{dateLabel ? `${dateLabel} ` : ''}食事を追加</T>
           <T size={12} c={color.sub} style={{ marginLeft: 8 }}>あと P{Math.round(remaining.P)} F{Math.round(remaining.F)} C{Math.round(remaining.C)}</T>
         </View>
-        {slotOpen && (
+        {mode !== 3 && (
+          <Pressable accessibilityRole="button" accessibilityLabel="時間帯を変える" onPress={() => setSlotOpen(!slotOpen)} style={{ marginHorizontal: 18, minHeight: 32, justifyContent: 'center', alignSelf: 'flex-start' }}>
+            <T size={12} c={color.sub}>{SLOT_LABEL[slot]}に入れる <T size={12} c={color.sub}>{slotOpen ? '˄' : '˅'}</T></T>
+          </Pressable>
+        )}
+        {slotOpen && mode !== 3 && (
           <View style={{ marginHorizontal: 18, marginTop: 8 }}>
             <Segmented value={slot} onChange={(s: Slot) => { setSlot(s); setSlotOpen(false); }} options={(['朝', '昼', '間食', '夜'] as Slot[]).map((v) => ({ value: v, label: v }))} />
           </View>
@@ -228,7 +249,7 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
               setGram(null);
               setManual(false);
             }}
-            options={modeLabels.map((label, i) => ({ value: i as Mode, label }))}
+            options={modeOptions}
           />
         </View>
 
@@ -321,6 +342,38 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
                   finish(`${f.name} ${g}g`, [{ foodId: id, name: f.name, grams: g, ...scale(f, g) }]);
                 }}
               />
+            </View>
+          )}
+
+          {mode === 3 && (
+            <View>
+              <View style={{ marginHorizontal: 18, marginTop: 14, flexDirection: 'row', gap: 6 }}>
+                {(['朝', '昼', '夜', '間食'] as Slot[]).map((sl) => (
+                  <Pressable key={sl} accessibilityRole="button" onPress={() => setRough((r) => ({ ...r, slot: sl }))} style={{ flex: 1, height: 44, borderWidth: hairline, borderColor: color.lineStrong, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center', backgroundColor: rSlot === sl ? color.text : color.surface }}>
+                    <T size={14} c={rSlot === sl ? color.onText : color.text}>{sl}</T>
+                  </Pressable>
+                ))}
+              </View>
+              <View style={{ marginHorizontal: 18, marginTop: 12 }}>
+                <StepBox value={fmt(rough.kcal)} unit="kcal" onDown={() => setRough((r) => ({ ...r, kcal: Math.max(100, r.kcal - 100) }))} onUp={() => setRough((r) => ({ ...r, kcal: r.kcal + 100 }))} height={76} buttonWidth={64} size={40} radiusPx={10} label="kcal" />
+              </View>
+              <View style={{ marginHorizontal: 18, marginTop: 8, flexDirection: 'row', gap: 6 }}>
+                {[300, 500, 700, 1000].map((k) => (
+                  <Pressable key={k} accessibilityRole="button" onPress={() => setRough((r) => ({ ...r, kcal: k }))} style={{ flex: 1, height: 40, borderWidth: hairline, borderColor: color.lineStrong, borderRadius: radius.input, alignItems: 'center', justifyContent: 'center', backgroundColor: color.surface }}>
+                    <N size={15} w={600}>{fmt(k)}</N>
+                  </Pressable>
+                ))}
+              </View>
+              <View style={{ marginHorizontal: 18, marginTop: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <T size={13} c={color.sub}>P</T>
+                <View style={{ flex: 1 }}>
+                  <Segmented value={rough.p} onChange={(v) => setRough((r) => ({ ...r, p: v }))} options={[{ value: 0 as const, label: '少なめ' }, { value: 1 as const, label: '普通' }, { value: 2 as const, label: '多め' }]} />
+                </View>
+              </View>
+              <T size={12} c={color.sub} style={{ paddingHorizontal: 18, paddingTop: 10 }}>{rSlot}に P{rP} F{rF} C{rC} として記録</T>
+              <View style={{ paddingHorizontal: 18, paddingTop: 14 }}>
+                <PrimaryButton label="追加" style={{ borderRadius: 10 }} onPress={() => finish('ざっくり', [{ foodId: null, name: 'ざっくり', grams: null, kcal: rough.kcal, P: rP, F: rF, C: rC }], { inputType: 'rough', slot: rSlot })} />
+              </View>
             </View>
           )}
 

@@ -9,9 +9,10 @@ import { MealFlow, PhotoThumb } from '../../components/MealFlow';
 import { WeightSheet } from '../../components/WeightSheet';
 import { useNow } from '../../components/useNow';
 import { pickPhoto, resolvePhotoUri, type PickedPhoto } from '../../services/photos';
-import { addDays, dateKey, formatJpDate, slotOf } from '../../domain/dates';
+import { addDays, dateKey, formatJpDate } from '../../domain/dates';
 import { DAY_LABELS, DAY_TYPE_JP, type DayType, type Macro } from '../../domain/types';
-import { groupMeals, sumMeals, templateName, weightAverage7, useWeek, type MealGroup } from '../../store/selectors';
+import { groupMeals, sumMeals, templateName, useWeek, useWeightStats, type MealGroup } from '../../store/selectors';
+import { signed1 } from '../../domain/weight';
 import { useStore } from '../../store/store';
 
 const fmt = (n: number) => Math.round(n).toLocaleString();
@@ -29,6 +30,8 @@ export default function TodayScreen() {
   const router = useRouter();
   const now = useNow();
   const w = useWeek(now);
+  const wstats = useWeightStats(now);
+  const addUsualMeals = useStore((s) => s.addUsualMeals);
   const meals = useStore((s) => s.meals);
   const sessions = useStore((s) => s.sessions);
   const weights = useStore((s) => s.weights);
@@ -42,7 +45,7 @@ export default function TodayScreen() {
   const [weightDate, setWeightDate] = useState<string | null>(null);
   const showToast = useStore((s) => s.showToast);
   const [sheet, setSheet] = useState<null | 'meal'>(null);
-  const [mode, setMode] = useState<0 | 1 | 2>(0);
+  const [mode, setMode] = useState<0 | 1 | 2 | 3>(0);
   const { meal } = useLocalSearchParams<{ meal?: string }>();
 
   useEffect(() => {
@@ -96,47 +99,40 @@ export default function TodayScreen() {
   const badgeText = (i: number) => (bars[i].type === 'off' ? 'オフ' : `${weekBack === 0 ? menuOf(i) : templateName(w.templates, w.weekPlan[i])}・${DAY_TYPE_JP[bars[i].type]}`);
 
   const dC = w.today.C - w.plan.days[w.ti].C;
+  // 状態の行は今日の画面には出さない。ほかの日だけ（v2）
   let lineL = '';
   let lineR = '';
-  let lineC: string = color.badgeFg;
-  if (isToday) {
-    if (w.todayWorkout) {
-      const tm = new Date(w.todayWorkout.endedAt);
-      lineL = `${String(tm.getHours()).padStart(2, '0')}:${String(tm.getMinutes()).padStart(2, '0')} ${w.todayWorkout.name} 完了`;
-      lineR = w.changed ? `目標変更 C${sign(dC)}${Math.abs(dC)}g` : '予定どおり・目標そのまま';
-      lineC = color.brandText;
-    } else if (w.changed) {
-      lineL = w.today.type === 'off' ? '今日は休み' : `今日は${DAY_TYPE_JP[w.today.type]}に変更`;
-      lineR = `目標変更 C${sign(dC)}${Math.abs(dC)}g`;
-      lineC = color.brandText;
-    } else if (w.today.type === 'off') {
-      lineL = 'トレーニングなし';
-      lineR = linked ? 'Pは維持、Cを減らす' : '';
-    } else {
-      lineL = `${templateName(w.templates, w.todayTemplateId)}の予定`;
-      lineR = 'トレーニング前';
-    }
-  } else if (past) {
+  if (past) {
     lineL = viewEaten.kcal ? '記録済み' : '記録なし';
     lineR = viewEaten.kcal ? `目標より ${sign(viewEaten.kcal - dd.kcal)}${fmt(Math.abs(viewEaten.kcal - dd.kcal))}kcal` : '下から追加できます';
-  } else {
+  } else if (!isToday) {
     lineL = dd.type === 'off' ? 'トレーニングなし' : `予定：${templateName(w.templates, w.weekPlan[vd])}`;
     lineR = linked ? (dd.type === 'off' ? 'Pは維持、Cを減らす' : '予定を変えたら残りの日に配り直し') : '';
   }
+  // 残りkcalの下の1行：その日が通常の日より何kcal多い／少ないか。予定と違う日タイプになったら、変わったCを出す
+  const sumM = w.planTypes.reduce((a, t) => a + w.profile.coef[t], 0);
+  const normK = sumM ? (w.weekKcal * w.profile.coef.normal) / sumM : 0;
+  const why = !linked
+    ? ''
+    : isToday && weekBack === 0 && w.changed
+      ? `目標を変更 C${sign(dC)}${Math.abs(dC)}g`
+      : dd.type === 'normal'
+        ? ''
+        : `${dd.type === 'off' ? 'オフ' : weekBack === 0 ? menuOf(vd) : templateName(w.templates, w.weekPlan[vd])} ${sign(dd.kcal - normK)}${fmt(Math.abs(dd.kcal - normK))}kcal`;
+  const loggedDays = dates.filter((d) => { const k = dateKey(d); return meals.some((m) => m.date === k); }).length;
 
   const rem = viewRemaining;
   const kcalLabel = isToday ? (rem.kcal >= 0 ? '残り（目安）' : '超過（目安）') : past ? '実績' : '目標（目安）';
   const kcalBig = isToday ? Math.abs(rem.kcal) : past ? viewEaten.kcal : dd.kcal;
   const kcalSub = isToday || past ? `/ 目標 ${fmt(dd.kcal)} kcal` : 'kcal';
-  const avg7 = weightAverage7(weights, viewDate);
-  const openMeal = (m: 0 | 1 | 2 = 0) => {
+  const openMeal = (m: 0 | 1 | 2 | 3 = 0) => {
     setMode(m);
     setSheet('meal');
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: color.bg }}>
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 4, paddingBottom: 110 }}>
+      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 4, paddingBottom: 130 }}>
         <View style={{ paddingLeft: 10, paddingRight: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Pressable accessibilityRole="button" accessibilityLabel="前の週" disabled={weekBack >= 52} onPress={() => go(weekBack + 1)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: weekBack >= 52 ? 0.3 : 1 }}>
@@ -150,8 +146,9 @@ export default function TodayScreen() {
           <Badge high={dd.type === 'high'}>{badgeText(vd)}</Badge>
         </View>
 
-        {/* 週バー */}
-        <View style={{ flexDirection: 'row', gap: 4, paddingHorizontal: 16, marginTop: 4 }}>
+        {/* 週バー（右に、その週の記録日数と、体重の週あたりの変化） */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, marginTop: 4 }}>
+        <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', gap: 4 }}>
           {bars.map((d, i) => (
             <Pressable
               key={i}
@@ -167,6 +164,11 @@ export default function TodayScreen() {
             </Pressable>
           ))}
         </View>
+          <View style={{ alignItems: 'flex-end', gap: 2 }}>
+            <T size={12} c={color.badgeFg}>記録 <N size={16} w={600} c={color.text}>{loggedDays}</N>/7日</T>
+            <T size={12} c={color.badgeFg}>体重 <N size={16} w={600} c={color.text}>{wstats.weekDiff !== null ? signed1(wstats.weekDiff) : '—'}</N>kg/週</T>
+          </View>
+        </View>
 
         {/* 残りkcal */}
         <View style={{ paddingHorizontal: 22, marginTop: 18 }}>
@@ -177,6 +179,7 @@ export default function TodayScreen() {
             </N>
             <T size={13} c={color.sub}>{kcalSub}</T>
           </View>
+          {why ? <T size={12} w={700} c={color.brandText} style={{ marginTop: 6 }}>{why}</T> : null}
         </View>
 
         {/* PFC */}
@@ -184,33 +187,36 @@ export default function TodayScreen() {
           {MACROS.map(([name, k, c]) => {
             const eaten = isToday ? w.eaten[k] : past ? viewEaten[k] : 0;
             const over = isToday && rem[k] < 0;
+            const big = k !== 'F'; // Fは少し小さく
             return (
               <View key={k}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
-                  <T size={12} w={700} c={c}>{name}</T>
+                  <T size={big ? 13 : 12} w={700} c={c}>{name}</T>
                   {isToday ? (
-                    <N size={20} w={600} c={over ? color.brandText : color.text}>
+                    <N size={big ? 20 : 17} w={600} c={over ? color.brandText : color.text}>
                       {over ? `+${Math.round(-rem[k])}` : `あと ${Math.round(rem[k])}`}
                       <T size={12} c={color.sub}> g / {dd[k]}</T>
                     </N>
                   ) : (
-                    <N size={20} w={600}>
+                    <N size={big ? 20 : 17} w={600}>
                       {past ? Math.round(viewEaten[k]) : dd[k]}
                       <T size={12} c={color.sub}> g{past ? ` / ${dd[k]}` : ''}</T>
                     </N>
                   )}
                 </View>
-                <Bar pct={dd[k] ? (eaten / dd[k]) * 100 : 0} fill={c} />
+                <Bar pct={dd[k] ? (eaten / dd[k]) * 100 : 0} fill={c} height={big ? 8 : 6} />
               </View>
             );
           })}
         </View>
 
-        {/* 状態の行 */}
-        <View style={{ marginTop: 16, marginHorizontal: 22, borderTopWidth: hairline, borderBottomWidth: hairline, borderColor: color.line, minHeight: 44, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-          <T size={13} c={color.badgeFg}>{lineL}</T>
-          <T size={13} w={700} c={lineC}>{lineR}</T>
-        </View>
+        {/* 状態の行（今日の画面には出さない） */}
+        {!isToday && (
+          <View style={{ marginTop: 16, marginHorizontal: 22, borderTopWidth: hairline, borderBottomWidth: hairline, borderColor: color.line, minHeight: 44, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+            <T size={13} c={color.badgeFg}>{lineL}</T>
+            <T size={13} w={700} c={color.text} style={{ textAlign: 'right', flexShrink: 1 }}>{lineR}</T>
+          </View>
+        )}
 
         {!linked && isToday && (
           <Pressable accessibilityRole="button" onPress={() => router.push('/paywall')} style={{ marginHorizontal: 22, minHeight: 44, justifyContent: 'center', borderBottomWidth: hairline, borderBottomColor: color.line }}>
@@ -220,24 +226,22 @@ export default function TodayScreen() {
 
         {canRecord && (
           <>
-            {/* 体重（高さ52）。未入力は「今朝の体重」を太字に、前回の値と黒い「入力」ボタン。入力済みは枠だけの「変更」 */}
-            <Pressable accessibilityRole="button" onPress={() => setWeightDate(viewKey)} style={{ marginHorizontal: 22, minHeight: 52, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, borderBottomWidth: hairline, borderBottomColor: color.line }}>
-              <T size={13} w={viewWeight !== undefined ? 400 : 700} c={viewWeight !== undefined ? color.sub : color.text}>{viewWeight !== undefined ? '体重' : isToday ? '今朝の体重' : `${dayLabel}の体重`}</T>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <T size={13} c={color.badgeFg}>
-                  {viewWeight !== undefined ? (
-                    <>
-                      <N size={15} w={600}>{viewWeight.toFixed(1)}</N> kg{avg7 ? `・7日平均 ${avg7.toFixed(1)}` : ''}
-                    </>
-                  ) : (
-                    `前回 ${w.latestWeight.toFixed(1)}`
-                  )}
-                </T>
-                <View style={{ height: 32, paddingHorizontal: 12, borderRadius: radius.input, alignItems: 'center', justifyContent: 'center', backgroundColor: viewWeight !== undefined ? 'transparent' : color.text, borderWidth: hairline, borderColor: viewWeight !== undefined ? color.lineStrong : color.text }}>
-                  <T size={12} w={700} c={viewWeight !== undefined ? color.badgeFg : color.onText}>{viewWeight !== undefined ? '変更' : '入力'}</T>
+            {/* 今日の記録：体重の行と、「いつも通り」「ざっくり」。常に同じ位置 */}
+            <View style={{ marginTop: 16, marginHorizontal: 16, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line, borderRadius: 12, paddingTop: 4, paddingHorizontal: 14, paddingBottom: 14, gap: 10 }}>
+              <Pressable accessibilityRole="button" onPress={() => setWeightDate(viewKey)} style={{ minHeight: 52, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, borderBottomWidth: hairline, borderBottomColor: color.line }}>
+                <T size={14}>{isToday ? '体重' : `${dayLabel}の体重`}</T>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <N size={18} w={600} c={viewWeight !== undefined ? color.text : color.faint}>{viewWeight !== undefined ? `${viewWeight.toFixed(1)} kg` : '— kg'}</N>
+                  <View style={{ height: 34, paddingHorizontal: 12, borderRadius: radius.input, alignItems: 'center', justifyContent: 'center', backgroundColor: viewWeight !== undefined ? color.surface : color.text, borderWidth: hairline, borderColor: color.text }}>
+                    <T size={12} w={700} c={viewWeight !== undefined ? color.text : color.onText}>{viewWeight !== undefined ? '変更' : '入力'}</T>
+                  </View>
                 </View>
+              </Pressable>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <PrimaryButton label="いつも通り" onPress={() => void addUsualMeals(viewKey)} style={{ flex: 1, borderRadius: 10 }} />
+                <OutlineButton label="ざっくり" onPress={() => openMeal(3)} style={{ flex: 1, borderRadius: 10 }} />
               </View>
-            </Pressable>
+            </View>
 
             {/* その日のトレーニング（記録があれば） */}
             {!isToday && viewWorkouts.map((x) => (
@@ -258,7 +262,7 @@ export default function TodayScreen() {
                     {g.photoUri ? <View style={{ marginRight: 8 }}><PhotoThumb photo={{ uri: resolvePhotoUri(g.photoUri) }} size={28} /></View> : null}
                     <T size={13.5} style={{ flex: 1 }} numberOfLines={1}>{g.name}</T>
                     {g.ai && !g.photoUri && <Badge high>AI</Badge>}
-                    <N size={15} w={500} style={{ marginLeft: 8, minWidth: 40, textAlign: 'right' }}>{fmt(g.kcal)}</N>
+                    <N size={15} w={500} style={{ marginLeft: 8, minWidth: 40, textAlign: 'right' }}>{g.rough ? '約' : ''}{fmt(g.kcal)}</N>
                   </Pressable>
                   <Pressable accessibilityRole="button" accessibilityLabel={`${g.name}を削除`} onPress={() => removeMealGroup(g.groupId)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
                     <T size={16} c={color.sub}>×</T>
@@ -270,8 +274,8 @@ export default function TodayScreen() {
         )}
       </ScrollView>
 
-      {/* 固定のボタン。今日は［カメラ］［食事を記録］。他の日を見ているときはカメラを隠し、「今日に戻る」を出す */}
-      <View style={{ position: 'absolute', left: 22, right: 22, bottom: 12, flexDirection: 'row', gap: 8 }}>
+      {/* 固定のボタン。今日は［カメラ］［食事を記録（枠だけ）］。ほかの日は「今日に戻る」（黒） */}
+      <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 22, paddingTop: 8, paddingBottom: 12, flexDirection: 'row', gap: 8, backgroundColor: color.bg }}>
         {isToday && (
           <Pressable
             accessibilityRole="button"
@@ -283,13 +287,19 @@ export default function TodayScreen() {
               setPhoto(r.photo);
               openMeal(2);
             }}
-            style={{ width: 52, height: 52, borderWidth: hairline, borderColor: color.lineStrong, borderRadius: radius.button, backgroundColor: color.surface, alignItems: 'center', justifyContent: 'center' }}
+            style={{ width: 56, height: 56, borderWidth: hairline, borderColor: color.lineStrong, borderRadius: 10, backgroundColor: color.surface, alignItems: 'center', justifyContent: 'center' }}
           >
             <CameraIcon size={24} />
           </Pressable>
         )}
-        {!isToday && <OutlineButton label="今日に戻る" onPress={() => setSel(null)} style={{ flex: 1 }} />}
-        {canRecord && <PrimaryButton label={isToday ? '食事を記録' : `${dayLabel}に記録`} onPress={() => openMeal(0)} style={{ flex: isToday ? 1 : 1.5 }} />}
+        {isToday ? (
+          <OutlineButton label="食事を記録" onPress={() => openMeal(0)} style={{ flex: 1, borderRadius: 10 }} />
+        ) : (
+          <>
+            {isPast && <OutlineButton label="この日に記録" onPress={() => openMeal(0)} style={{ flex: 1, borderRadius: 10 }} />}
+            <PrimaryButton label="今日に戻る" onPress={() => setSel(null)} style={{ flex: 1, borderRadius: 10 }} />
+          </>
+        )}
       </View>
 
       <MealFlow
@@ -300,7 +310,7 @@ export default function TodayScreen() {
         todayKey={w.todayKey}
         date={viewKey}
         dateLabel={isToday ? null : dayLabel}
-        slot={isToday ? slotOf(now) : '昼'}
+        slot={viewGroups.some((g) => g.slot === '朝') ? (viewGroups.some((g) => g.slot === '昼') ? '夜' : '昼') : '朝'}
         postWorkout={isToday && !!w.todayWorkout}
         aiLimit={w.features.aiLimit}
         photo={photo}

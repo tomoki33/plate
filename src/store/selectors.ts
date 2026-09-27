@@ -20,6 +20,8 @@ export interface MealGroup {
   ai: boolean;
   /** 写真で記録した食事の写真（あれば） */
   photoUri: string | null;
+  /** 「ざっくり」で入れた食事（目安なので、kcal は「約600」のように出す） */
+  rough: boolean;
   kcal: number;
   createdAt: number;
   items: MealEntry[];
@@ -34,7 +36,7 @@ export function groupMeals(meals: MealEntry[]): MealGroup[] {
       g.items.push(m);
       g.kcal += m.kcal;
       g.ai = g.ai || m.ai;
-    } else map.set(m.groupId, { groupId: m.groupId, name: m.groupName, slot: m.slot, ai: m.ai, photoUri: m.photoUri, kcal: m.kcal, createdAt: m.createdAt, items: [m] });
+    } else map.set(m.groupId, { groupId: m.groupId, name: m.groupName, slot: m.slot, ai: m.ai, photoUri: m.photoUri, rough: m.inputType === 'rough', kcal: m.kcal, createdAt: m.createdAt, items: [m] });
   }
   return [...map.values()].sort((a, b) => a.createdAt - b.createdAt);
 }

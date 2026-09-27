@@ -9,7 +9,7 @@ export function TabIcon({ name, focused }: { name: TabIconName; focused: boolean
   const stroke = focused ? color.text : color.sub;
   const sw = focused ? 2 : 1.6;
   return (
-    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth={sw}>
+    <Svg width={26} height={26} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth={sw}>
       {name === 'today' && (
         <G>
           <Rect x={4} y={5} width={16} height={15} rx={2} />

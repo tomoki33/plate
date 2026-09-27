@@ -1,19 +1,21 @@
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Badge, Card, CardRow, Chip, InlineStepper, N, Notice, PrimaryButton, Segmented, T, color, hairline, radius } from '@/design-system';
+import { Badge, Card, CardRow, Chip, InlineStepper, N, Notice, PrimaryButton, Segmented, Sheet, T, color, hairline, radius } from '@/design-system';
 import { AccountSheetsHost } from '../../components/AccountSheets';
+import { getFoodsByIds } from '../../db/repo';
+import type { FoodItem, MealSet } from '../../domain/models';
 import { DaySpreadSection, ProteinSection } from '../../components/DaySpread';
 import { useNow } from '../../components/useNow';
 import { computeTargets } from '../../domain/engine';
-import { ACTIVITY_LEVELS, GOAL_JP, checkWarnings, paceOptions, type Goal } from '../../domain/nutrition';
+import { ACTIVITY_LEVELS, GOAL_JP, ageOf, bmr, checkWarnings, nearestActivity, paceOptions, type Goal } from '../../domain/nutrition';
 import { DAY_LABELS, DAY_TYPE_JP, type DayType } from '../../domain/types';
 import { avg7 } from '../../domain/weight';
 import { readBodyComposition } from '../../services/healthkit';
 import { backupLabel } from '../../store/backupRunner';
 import { templateType, useWeek } from '../../store/selectors';
-import { useStore } from '../../store/store';
+import { USUAL_SLOTS, useStore, type UsualSlot } from '../../store/store';
 
 const fmt = (n: number) => Math.round(n).toLocaleString();
 const typeColor = (t: DayType): string => (t === 'high' ? color.brand : t === 'normal' ? color.brandPale2 : color.off);
@@ -32,6 +34,7 @@ export default function SettingsScreen() {
   const [paceOpen, setPaceOpen] = useState(false);
   const [sheet, setSheet] = useState<null | 'login' | 'logout'>(null);
   const [hk, setHk] = useState<string | null>(null);
+  const [usualSlot, setUsualSlot] = useState<UsualSlot | null>(null);
 
   // 高い日・通常の日・オフの日の1日あたり kcal（日タイプ連動を使った場合の値）
   const dayKcal = useMemo(() => {
@@ -48,6 +51,9 @@ export default function SettingsScreen() {
   const avg = avg7(st.weights, now) ?? w.weight;
   const goalWeight = profile.goalWeightKg ?? Math.round((avg + (profile.goal === 'bulk' ? 3 : profile.goal === 'cut' ? -3 : 0)) * 2) / 2;
   const account = st.account;
+  const age = ageOf(profile.birthYear, now);
+  const bmrNow = Math.round(bmr(profile, w.weight, age));
+  const activity = nearestActivity(profile.activity);
 
   const importHealth = async () => {
     setHk('読み込み中…');
@@ -58,6 +64,23 @@ export default function SettingsScreen() {
   };
 
   const label = (text: string) => <T size={11} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 6 }}>{text}</T>;
+  /** プロフィールの1行（高さ56以上）。右に、読み取り専用の値・±・切り替え */
+  const profRow = (title: string, sub: string, right: React.ReactNode, last?: boolean) => (
+    <View style={{ minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 6, paddingLeft: 14, paddingRight: 6, borderBottomWidth: last ? 0 : hairline, borderBottomColor: color.line }}>
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <T size={14}>{title}</T>
+        {sub ? <T size={11} c={color.sub}>{sub}</T> : null}
+      </View>
+      {right}
+    </View>
+  );
+  const ro = (v: string) => <N size={16} w={600} style={{ paddingRight: 8 }}>{v}</N>;
+  const seg = <V extends string | number>(opts: { value: V; label: string }[], cur: V, onChange: (v: V) => void) => (
+    <View style={{ minWidth: 140, marginRight: 8 }}>
+      <Segmented value={cur} onChange={onChange} options={opts} />
+    </View>
+  );
+  const usualName = (sl: UsualSlot) => st.mealSets.find((m) => m.id === st.usualMeals[sl])?.name ?? 'なし';
 
   return (
     <View style={{ flex: 1, backgroundColor: color.bg }}>
@@ -69,8 +92,8 @@ export default function SettingsScreen() {
           {account ? (
             <Card style={{ padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
               <View style={{ flex: 1, gap: 2 }}>
-                <T size={14} w={500} numberOfLines={1}>{account.email ?? 'ログイン中'}</T>
-                <T size={11} c={color.sub}>{PROVIDER_JP[account.provider] ?? 'メール'}でログイン中・バックアップ {st.lastBackupAt ? backupLabel(st.lastBackupAt, now) : 'まだ'}</T>
+                <T size={15} w={500} numberOfLines={1}>{account.email ?? 'ログイン中'}</T>
+                <T size={12} c={color.sub}>{PROVIDER_JP[account.provider] ?? 'メール'}でログイン中・バックアップ {st.lastBackupAt ? backupLabel(st.lastBackupAt, now) : 'まだ'}</T>
               </View>
               <Badge high>{st.lastBackupAt ? '同期済み' : '未バックアップ'}</Badge>
             </Card>
@@ -85,7 +108,19 @@ export default function SettingsScreen() {
           )}
         </View>
 
-        {/* 2. 目標 */}
+        {/* 2. プロフィール（編集できる。変えると、目標がすぐ変わる） */}
+        {label('プロフィール')}
+        <Card>
+          {profRow('性別', '', seg([{ value: 'male' as const, label: '男性' }, { value: 'female' as const, label: '女性' }], profile.sex, (v) => st.updateProfile({ sex: v }, w.weight)))}
+          {profRow('生まれた年', `${age}歳`, <InlineStepper value={`${profile.birthYear}年`} width={64} sub onDown={() => st.updateProfile({ birthYear: Math.max(1950, profile.birthYear - 1) }, w.weight)} onUp={() => st.updateProfile({ birthYear: Math.min(now.getFullYear() - 15, profile.birthYear + 1) }, w.weight)} />)}
+          {profRow('身長', '', <InlineStepper value={`${profile.heightCm} cm`} width={64} sub onDown={() => st.updateProfile({ heightCm: Math.max(130, profile.heightCm - 1) }, w.weight)} onUp={() => st.updateProfile({ heightCm: Math.min(220, profile.heightCm + 1) }, w.weight)} />)}
+          {profRow('体重', '記録の7日平均から自動', ro(`${w.weight.toFixed(1)} kg`))}
+          {profRow('活動量', activity.note, seg(ACTIVITY_LEVELS.map((a) => ({ value: a.value, label: a.label })), activity.value, (v) => st.updateProfile({ activity: v }, w.weight)))}
+          {profRow('基礎代謝（目安）', '上の内容から計算', ro(`${fmt(bmrNow)} kcal`))}
+          {profRow('維持カロリー（目安）', 'ここから減量分を引いて週の合計に', ro(`${fmt(profile.tdee)} kcal/日`), true)}
+        </Card>
+
+        {/* 3. 目標 */}
         {label('目標')}
         <Card>
           <CardRow title="目的" right={<T size={14} c={color.badgeFg}>{GOAL_JP[profile.goal]}　{goalOpen ? '˄' : '˅'}</T>} onPress={() => setGoalOpen(!goalOpen)} />
@@ -96,19 +131,11 @@ export default function SettingsScreen() {
           )}
           <CardRow
             title="目標体重"
-            right={
-              <InlineStepper
-                value={`${goalWeight.toFixed(1)} kg`}
-                width={70}
-                sub
-                onDown={() => st.setGoalWeight(goalWeight - 0.5)}
-                onUp={() => st.setGoalWeight(goalWeight + 0.5)}
-              />
-            }
+            right={<InlineStepper value={`${goalWeight.toFixed(1)} kg`} width={70} sub onDown={() => st.setGoalWeight(goalWeight - 0.5)} onUp={() => st.setGoalWeight(goalWeight + 0.5)} />}
           />
           <CardRow
             title="ペース"
-            right={<T size={14} c={color.badgeFg}>{profile.goal === 'maintain' ? '維持' : `${profile.pace > 0 ? '+' : '−'}${Math.abs(profile.pace).toFixed(2)} kg/週`}　{paceOpen ? '˄' : '˅'}</T>}
+            right={<N size={17} w={600}>{profile.goal === 'maintain' ? '維持' : `${profile.pace > 0 ? '+' : '−'}${Math.abs(profile.pace).toFixed(2)} kg/週`}<T size={14} c={color.badgeFg}>　{paceOpen ? '˄' : '˅'}</T></N>}
             onPress={() => profile.goal !== 'maintain' && setPaceOpen(!paceOpen)}
           />
           {paceOpen && profile.goal !== 'maintain' && (
@@ -120,8 +147,8 @@ export default function SettingsScreen() {
           )}
           <CardRow
             title="週の合計"
-            meta={profile.weekAdjustKcal !== 0 ? `ペースの見直しで ${profile.weekAdjustKcal > 0 ? '+' : '−'}${fmt(Math.abs(profile.weekAdjustKcal))}kcal を反映中・押すと元に戻す` : `1日平均 ${fmt(w.weekKcal / 7)}kcal・維持カロリーの推定 ${fmt(profile.tdee)}kcal`}
-            right={<N size={14} w={600} c={color.badgeFg}>{fmt(w.weekKcal)} kcal</N>}
+            meta={profile.weekAdjustKcal !== 0 ? `見直しで ${profile.weekAdjustKcal > 0 ? '+' : '−'}${fmt(Math.abs(profile.weekAdjustKcal))}kcal を反映中・押すと元に戻す` : `（維持カロリー ${fmt(profile.tdee)} ${profile.pace < 0 ? '−' : '+'} ${fmt(Math.abs(profile.pace * 7700) / 7)}）× 7`}
+            right={<N size={17} w={600}>{fmt(w.weekKcal)} kcal</N>}
             onPress={profile.weekAdjustKcal !== 0 ? () => st.addWeekAdjust(-profile.weekAdjustKcal, `週の合計を ${fmt(w.weekKcal - profile.weekAdjustKcal)}kcal に戻しました`) : undefined}
             minHeight={60}
             last
@@ -131,13 +158,28 @@ export default function SettingsScreen() {
           <View key={x.code} style={{ marginHorizontal: 16, marginTop: 8 }}><Notice>{x.text}</Notice></View>
         ))}
 
-        {/* 3. 日ごとの食べる量 */}
+        {/* 4. いつもの食事（「いつも通り」で入る内容） */}
+        {label('いつもの食事（「いつも通り」で入る内容）')}
+        <Card>
+          {USUAL_SLOTS.map((sl, i) => {
+            const set = st.usualMeals[sl];
+            return (
+              <Pressable key={sl} accessibilityRole="button" onPress={() => setUsualSlot(sl)} style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, borderBottomWidth: i === 2 ? 0 : hairline, borderBottomColor: color.line }}>
+                <T size={12} w={700} c={color.sub} style={{ width: 36 }}>{sl}</T>
+                <T size={14} c={set ? color.text : color.sub} numberOfLines={1} style={{ flex: 1 }}>{usualName(sl)}</T>
+                <T size={16} c={color.sub}>›</T>
+              </Pressable>
+            );
+          })}
+        </Card>
+
+        {/* 5. 日ごとの食べる量 */}
         <DaySpreadSection coef={profile.coef} kcal={dayKcal} linked={w.features.linkedTargets} onCoef={(c) => st.setCoefs(c)} />
 
-        {/* 4. たんぱく質（毎日同じ量） */}
+        {/* 6. たんぱく質（毎日同じ量） */}
         <ProteinSection pk={profile.pk} weight={w.weight} onPk={(v) => st.setPkTo(v)} />
 
-        {/* 5. 週間スケジュール */}
+        {/* 7. 週間スケジュール */}
         {label('週間スケジュール')}
         <Card>
           {w.weekPlan.map((id, i) => {
@@ -164,31 +206,9 @@ export default function SettingsScreen() {
             );
           })}
         </Card>
+        <T size={11} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 6 }}>メニューの追加・編集は、トレーニングタブの「メニュー」から。</T>
 
-        {/* ここから先は、目標エンジンと機能のための設定 */}
-        {label('基本情報')}
-        <Card>
-          <View style={{ padding: 12, borderBottomWidth: hairline, borderBottomColor: color.line }}>
-            <Segmented value={profile.sex} onChange={(v) => st.updateProfile({ sex: v }, w.weight)} options={[{ value: 'male' as const, label: '男性' }, { value: 'female' as const, label: '女性' }]} />
-          </View>
-          <CardRow title="生まれた年" right={<InlineStepper value={String(profile.birthYear)} width={56} sub onDown={() => st.updateProfile({ birthYear: Math.max(1950, profile.birthYear - 1) }, w.weight)} onUp={() => st.updateProfile({ birthYear: Math.min(now.getFullYear() - 15, profile.birthYear + 1) }, w.weight)} />} />
-          <CardRow title="身長" right={<InlineStepper value={`${profile.heightCm} cm`} width={64} sub onDown={() => st.updateProfile({ heightCm: Math.max(130, profile.heightCm - 1) }, w.weight)} onUp={() => st.updateProfile({ heightCm: Math.min(220, profile.heightCm + 1) }, w.weight)} />} />
-          <View style={{ padding: 12, flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-            {ACTIVITY_LEVELS.map((a) => (
-              <Chip key={a.value} label={`活動量：${a.label}`} selected={profile.activity === a.value} onPress={() => st.updateProfile({ activity: a.value }, w.weight)} />
-            ))}
-          </View>
-        </Card>
-        <T size={11} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 6 }}>基本情報を変えると、維持カロリーの推定は式から出し直します。</T>
-
-        {label('トレーニングのテンプレート')}
-        <Card>
-          {w.templates.map((t) => (
-            <CardRow key={t.id} title={t.name} meta={`${t.exercises.length}種目・日タイプ ${DAY_TYPE_JP[t.defaultDayType]}`} right={<T size={12} c={color.sub}>編集 ›</T>} onPress={() => router.push({ pathname: '/template/[id]', params: { id: t.id } })} />
-          ))}
-          <CardRow title="＋ テンプレートをつくる" onPress={() => router.push({ pathname: '/template/[id]', params: { id: 'new' } })} last />
-        </Card>
-
+        {/* ここから先は、機能のための設定 */}
         {label('食事')}
         <Card>
           <CardRow title="マイ食品" meta={`${st.myFoods.length}件`} right={<T size={12} c={color.sub}>›</T>} onPress={() => router.push('/my-foods')} />
@@ -228,15 +248,64 @@ export default function SettingsScreen() {
           </View>
         )}
 
-        {/* 6. ログアウト（ログイン中だけ） */}
+        {/* ログアウト（一番下。ログイン中だけ）：高さ56、白地に枠、太字のbrandText */}
         {account && (
-          <Pressable accessibilityRole="button" onPress={() => setSheet('logout')} style={{ marginHorizontal: 16, marginTop: 20, height: 48, alignItems: 'center', justifyContent: 'center', borderWidth: hairline, borderColor: color.lineStrong, borderRadius: radius.button, backgroundColor: color.surface }}>
-            <T size={14} c={color.brandText}>ログアウト</T>
+          <Pressable accessibilityRole="button" onPress={() => setSheet('logout')} style={{ marginHorizontal: 16, marginTop: 8, marginBottom: 24, height: 56, alignItems: 'center', justifyContent: 'center', borderWidth: hairline, borderColor: color.line, borderRadius: radius.card, backgroundColor: color.surface }}>
+            <T size={15} w={700} c={color.brandText}>ログアウト</T>
           </Pressable>
         )}
       </ScrollView>
 
       <AccountSheetsHost sheet={sheet} onClose={() => setSheet(null)} />
+      <UsualSheet slot={usualSlot} onClose={() => setUsualSlot(null)} />
     </View>
+  );
+}
+
+/** 「いつもの食事」を選ぶシート：マイセットか「なし」 */
+function UsualSheet({ slot, onClose }: { slot: UsualSlot | null; onClose: () => void }) {
+  const mealSets = useStore((s) => s.mealSets);
+  const usual = useStore((s) => s.usualMeals);
+  const setUsualMeal = useStore((s) => s.setUsualMeal);
+  const [foods, setFoods] = useState<Record<string, FoodItem>>({});
+  useEffect(() => {
+    if (!slot) return;
+    getFoodsByIds([...new Set(mealSets.flatMap((m) => m.items.map((i) => i.foodId)))]).then((fs) => setFoods(Object.fromEntries(fs.map((f) => [f.id, f]))));
+  }, [slot, mealSets]);
+  const pfc = (m: MealSet) => {
+    const t = { kcal: 0, P: 0, F: 0, C: 0 };
+    for (const it of m.items) {
+      const f = foods[it.foodId];
+      if (!f) continue;
+      const k = it.g / 100;
+      t.kcal += f.kcal * k;
+      t.P += f.p * k;
+      t.F += f.f * k;
+      t.C += f.c * k;
+    }
+    return `P${Math.round(t.P)} F${Math.round(t.F)} C${Math.round(t.C)}・${fmt(t.kcal)}kcal`;
+  };
+  const cur = slot ? usual[slot] : null;
+  const pick = (id: string | null) => {
+    if (slot) setUsualMeal(slot, id);
+    onClose();
+  };
+  return (
+    <Sheet visible={!!slot} onClose={onClose}>
+      <View style={{ paddingHorizontal: 18, paddingTop: 12, paddingBottom: 6 }}>
+        <T size={17} w={900}>{slot}のいつも通り</T>
+      </View>
+      <ScrollView style={{ maxHeight: 470 }} contentContainerStyle={{ paddingHorizontal: 18 }}>
+        {[...mealSets.map((m) => ({ id: m.id as string | null, name: m.name, meta: pfc(m) })), { id: null, name: 'なし', meta: 'この時間帯は入れない' }].map((o) => (
+          <Pressable key={o.id ?? 'none'} accessibilityRole="button" onPress={() => pick(o.id)} style={{ minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderBottomWidth: hairline, borderBottomColor: color.line }}>
+            <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+              <T size={15} numberOfLines={1}>{o.name}</T>
+              <N size={12} w={500} c={color.sub}>{o.meta}</N>
+            </View>
+            <T size={16} w={700} style={{ width: 28, textAlign: 'center' }}>{cur === o.id ? '✓' : ''}</T>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </Sheet>
   );
 }

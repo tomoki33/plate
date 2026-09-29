@@ -2,16 +2,22 @@
 // APIキーは端末に置かず、ここ（Supabase Edge Function）だけが持つ。
 //
 // デプロイ:
-//   supabase secrets set ANTHROPIC_API_KEY=... 
+//   supabase secrets set GEMINI_API_KEY=...
 //   supabase functions deploy estimate-meal
 // アプリ側: EXPO_PUBLIC_AI_ENDPOINT=https://<project>.supabase.co/functions/v1/estimate-meal
 //
 // 1日の回数上限は、サーバー側でも最大値（有料の30回）で止める。無料の3回は端末側で数える
 // （無料／有料をサーバーで判定するには RevenueCat の webhook で権利を保存する必要がある。未対応）。
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import catalog from './catalog.json' with { type: 'json' };
 
 const DAILY_LIMIT = 30;
-const MODEL = Deno.env.get('ESTIMATE_MODEL') ?? 'claude-haiku-4-5';
+const MODEL = Deno.env.get('ESTIMATE_MODEL') ?? 'gemini-flash-lite-latest';
+
+// 食品カタログ（scripts/build-catalog.py が生成）。AIには一覧から選ばせ、値はアプリ側のカタログ／成分表から引く。
+const CATALOG = catalog as [string, string][];
+const CATALOG_KEYS = new Set(CATALOG.map(([k]) => k));
+const CATALOG_LIST = CATALOG.map(([k, n]) => `${k}: ${n}`).join('\n');
 
 const SCHEMA = {
   type: 'object',
@@ -20,24 +26,39 @@ const SCHEMA = {
       type: 'array',
       items: {
         type: 'object',
-        properties: { name: { type: 'string' }, grams: { type: 'number' } },
-        required: ['name', 'grams'],
-        additionalProperties: false,
+        properties: {
+          key: { type: 'string', nullable: true },
+          name: { type: 'string' },
+          grams: { type: 'integer' },
+          kcal: { type: 'integer' },
+          protein: { type: 'integer' },
+          fat: { type: 'integer' },
+          carbs: { type: 'integer' },
+        },
+        required: ['name', 'grams', 'key', 'kcal', 'protein', 'fat', 'carbs'],
       },
     },
   },
   required: ['items'],
-  additionalProperties: false,
 };
 
-// PFC は AI に出させない。食品ごとの名前と重さだけを返させ、アプリ側で日本食品標準成分表（八訂）の値から計算する。
-const SYSTEM = `あなたは日本の食事を読み取る係です。ユーザーの写真や文章から、食べたものを1品ずつに分け、
-それぞれの名前と重さ(g)をJSONで返します。
-- 名前は、日本食品標準成分表（八訂）で探しやすい一般的な食品名にする（例：鶏むね肉、ごはん、味噌汁、鶏卵、納豆）。
-- 重さ(g)は、写真や文章から見積もる。量が分からないものは、一般的な1食分を仮定する。「2個」「1杯」などはgに換算する。
+// 数値の根拠を固定するため、食品は「カタログの key」で答えさせる。カタログにないものだけ、100gあたりの目安をAIが出す。
+const SYSTEM = `あなたは日本の食事を読み取る係です。ユーザーの写真や文章から、食べたものを1品ずつに分け、JSONで返します。
+
+各品について:
+- name: 一般的な食品・料理名（日本語）。
+- key: 下のカタログに同じ食品があれば、その key。近いものではなく、同じものがあるときだけ選ぶ（例：皮なしの鶏むね肉は chicken_breast_skinless、皮つきは chicken_breast_skin）。無ければ null。
+- grams: 写真や文章から見積もった重さ(g)。量が分からないものは一般的な1食分を仮定する。「2個」「1杯」などはgに換算する。
+- kcal・protein(たんぱく質g)・fat(脂質g)・carbs(炭水化物g): その食品100gあたりの目安を、整数で入れる。key があるときは使われないので、おおよそでよい。
+
+ルール:
+- 料理（牛丼、カレーライスなど）は、カタログに料理があればそれを1品として選ぶ。無ければ料理名のまま1品にして、目安を入れる。
 - ユーザーが「ひとこと」で補足したとき（例：米は半分残した）は、それを量に反映する。
 - 食べ物でないもの、判断できないものは items に含めない。
-- 説明文は書かず、指定のJSONだけを返す。`;
+- 説明文は書かず、指定のJSONだけを返す。
+
+カタログ（key: 名前）:
+${CATALOG_LIST}`;
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
@@ -71,37 +92,47 @@ Deno.serve(async (req) => {
   if (qerr) return json({ error: 'quota check failed' }, 500);
   if (!ok) return json({ error: 'daily limit reached' }, 429);
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-api-key': Deno.env.get('ANTHROPIC_API_KEY')!, 'anthropic-version': '2023-06-01' },
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': Deno.env.get('GEMINI_API_KEY')! },
     body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 1024,
-      system: SYSTEM,
-      messages: [
+      systemInstruction: { parts: [{ text: SYSTEM }] },
+      contents: [
         {
           role: 'user',
-          content: [
-            ...(image ? [{ type: 'image', source: { type: 'base64', media_type: mediaType, data: image } }] : []),
-            { type: 'text', text: text ? (image ? `ひとこと：${text}` : text) : 'この写真に写っている食事を読み取ってください。' },
+          parts: [
+            ...(image ? [{ inlineData: { mimeType: mediaType, data: image } }] : []),
+            { text: text ? (image ? `ひとこと：${text}` : text) : 'この写真に写っている食事を読み取ってください。' },
           ],
         },
       ],
-      output_config: { format: { type: 'json_schema', schema: SCHEMA } },
+      generationConfig: { maxOutputTokens: 2048, temperature: 0.2, responseMimeType: 'application/json', responseSchema: SCHEMA },
     }),
   });
   if (!res.ok) return json({ error: 'upstream error', status: res.status }, 502);
   const body = await res.json();
-  if (body.stop_reason === 'refusal') return json({ items: [] });
-  const raw = body.content?.find((b: { type: string }) => b.type === 'text')?.text ?? '';
+  const raw = body.candidates?.[0]?.content?.parts?.find((p: { text?: string }) => typeof p.text === 'string')?.text ?? '';
+  if (!raw) return json({ items: [] }); // 安全性フィルタなどで本文が無いとき
   try {
     const parsed = JSON.parse(raw);
     // 値の妥当性を確認してから返す（極端な値は捨てる）
-    const items = (parsed.items ?? []).filter(
-      (i: Record<string, unknown>) => typeof i.name === 'string' && typeof i.grams === 'number' && Number.isFinite(i.grams) && (i.grams as number) > 0 && (i.grams as number) <= 3000,
-    );
+    const ok = (v: unknown, max: number) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= max;
+    const items = (parsed.items ?? [])
+      .filter((i: Record<string, unknown>) => typeof i.name === 'string' && ok(i.grams, 3000) && (i.grams as number) > 0)
+      .map((i: Record<string, unknown>) => ({
+        name: i.name,
+        grams: i.grams,
+        // カタログに無い key は捨てる。値は key が無いときだけ、妥当な範囲のものを通す
+        key: typeof i.key === 'string' && CATALOG_KEYS.has(i.key) ? i.key : null,
+        ...(typeof i.key === 'string' && CATALOG_KEYS.has(i.key)
+          ? {}
+          : ok(i.kcal, 950) && ok(i.protein, 100) && ok(i.fat, 100) && ok(i.carbs, 100)
+            ? { kcal: i.kcal, protein: i.protein, fat: i.fat, carbs: i.carbs }
+            : {}),
+      }));
     return json({ items });
   } catch {
+    console.error('invalid model output', body.candidates?.[0]?.finishReason, raw.slice(0, 300));
     return json({ error: 'invalid model output' }, 502);
   }
 });

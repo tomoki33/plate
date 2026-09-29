@@ -36,7 +36,7 @@ export interface FoodItem {
   p: number;
   f: number;
   c: number;
-  source: '成分表' | '自作' | 'AI';
+  source: '成分表' | 'カタログ' | '自作' | 'AI';
   code?: string | null;
   unitG?: number | null;
   defaultG?: number | null;

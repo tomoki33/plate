@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { FREE_LAUNCH } from '../lib/flags';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { Badge, Field, N, Notice, PrimaryButton, Segmented, Sheet, StepBox, T, color, font, hairline, radius } from '@/design-system';
@@ -423,10 +424,10 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
               {aiError && <T size={12} c={color.brandText} style={{ paddingHorizontal: 18, paddingTop: 8 }}>{aiError}</T>}
               {aiLeft === 0 && (
                 <View style={{ paddingHorizontal: 18, paddingTop: 8 }}>
-                  <Notice>今日の回数を使い切りました。有料プランなら1日30回まで使えます。</Notice>
-                  <Pressable accessibilityRole="button" onPress={() => { onClose(); router.push('/paywall'); }} style={{ minHeight: 44, justifyContent: 'center' }}>
-                    <T size={13} w={700}>プランを見る ›</T>
-                  </Pressable>
+                  <Notice>{FREE_LAUNCH ? '今日の回数を使い切りました。明日また使えます。食べたものは、検索でも記録できます。' : '今日の回数を使い切りました。AIプラスなら1日30回まで使えます。'}</Notice>
+                  {!FREE_LAUNCH && <Pressable accessibilityRole="button" onPress={() => { onClose(); router.push('/paywall'); }} style={{ minHeight: 44, justifyContent: 'center' }}>
+                    <T size={13} w={700}>AIプラスを見る ›</T>
+                  </Pressable>}
                 </View>
               )}
               <View style={{ paddingHorizontal: 18, paddingTop: 16 }}>
@@ -474,7 +475,7 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
                       <Tag>見つからず</Tag>
                     </View>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <T size={11.5} c={color.sub} style={{ flex: 1 }}>成分表にないため、いまは除外します。</T>
+                      <T size={11.5} c={color.sub} style={{ flex: 1 }}>カタログ・成分表にないため、いまは除外します。</T>
                       {actions(false)}
                     </View>
                   </View>
@@ -487,7 +488,7 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                     <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
                       <T size={14} w={500}>{shortName(r.name!)}</T>
-                      <Tag>{r.origin === 'manual' ? '手動で選択' : r.origin === 'photo' ? '写真から推定' : r.origin === 'ai' ? 'AI推定' : '成分表と照合'}</Tag>
+                      <Tag>{r.origin === 'manual' ? '手動で選択' : r.origin === 'estimate' ? 'AIの目安' : r.origin === 'photo' ? '写真から推定' : r.origin === 'ai' ? 'AI推定' : '成分表と照合'}</Tag>
                     </View>
                     <View style={{ width: 132 }}>
                       <StepBox value={String(r.grams)} onDown={() => setGrams(r.grams! - 10)} onUp={() => setGrams(r.grams! + 10)} height={40} buttonWidth={40} size={17} radiusPx={radius.input} label={`${r.token}の`} />

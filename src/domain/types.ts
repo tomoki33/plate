@@ -40,6 +40,10 @@ export interface EngineInput {
    * 記録のない日は目標どおりに食べたものとして扱う（記録し忘れで残りが膨らまないように）。
    */
   actuals?: (number | null)[];
+  /** コーチが決めたたんぱく質（g/日）。あれば体重×P係数のかわりに使う */
+  fixedP?: number;
+  /** コーチが決めた脂質の割合（%）。あれば日タイプによらずこの割合（下限は体重×0.6g） */
+  fatPct?: number;
   /** false なら日タイプ連動なし（無料版）。毎日同じ固定目標 */
   linked?: boolean;
 }

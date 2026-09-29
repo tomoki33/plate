@@ -15,6 +15,8 @@ export interface PickResult {
   photo: PickedPhoto | null;
   /** 許可がない・開けないときに、画面に出す文 */
   error?: string;
+  /** カメラの許可がなくて開けなかったか（呼び出し側で、設定を開く／代わりの手段を出す） */
+  permissionDenied?: boolean;
 }
 
 const OPTIONS: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.5, base64: true, allowsEditing: false, exif: false };
@@ -25,7 +27,7 @@ export async function pickPhoto(source: 'camera' | 'library'): Promise<PickResul
     if (source === 'camera') {
       if (Platform.OS !== 'web') {
         const perm = await ImagePicker.requestCameraPermissionsAsync();
-        if (!perm.granted) return { photo: null, error: 'カメラの許可がありません。端末の設定から許可してください。' };
+        if (!perm.granted) return { photo: null, error: 'カメラの許可がありません。端末の設定から許可してください。', permissionDenied: true };
       }
       const r = await ImagePicker.launchCameraAsync(OPTIONS);
       return toResult(r);

@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 import { Card, CardRow, InlineStepper, N, Segmented, T, color, hairline } from '@/design-system';
 import { SPREAD_LIMITS, SPREAD_PRESETS, coefFromPercents, dailyProtein, matchSpreadPreset, spreadPercents, type SpreadPreset } from '../domain/nutrition';
 import type { Coef, DayType } from '../domain/types';
+import { CoachBadge } from './coach/CoachBits';
 
 const fmt = (n: number) => Math.round(n).toLocaleString();
 const barColor = (t: DayType): string => (t === 'high' ? color.brand : t === 'normal' ? color.brandPale2 : color.off);
@@ -15,7 +16,7 @@ const pctText = (p: number) => `${p > 0 ? '+' : p < 0 ? '−' : '±'}${Math.abs(
  * 「差を小さく／標準／差を大きく」から選ぶ。その下に、高い日・通常の日・オフの日のkcalを棒の高さと数字で出し、
  * 「通常より +15%」と添える。「細かく調整」を開くと、高い日とオフの日を1%ずつ動かせる（内部の値は係数）。
  */
-export function DaySpreadSection({ coef, kcal, linked, onCoef }: { coef: Coef; kcal: Record<DayType, number>; linked: boolean; onCoef: (c: Coef) => void }) {
+export function DaySpreadSection({ coef, kcal, onCoef }: { coef: Coef; kcal: Record<DayType, number>; onCoef: (c: Coef) => void }) {
   const [open, setOpen] = useState(false);
   const preset = matchSpreadPreset(coef);
   const pct = spreadPercents(coef);
@@ -44,8 +45,6 @@ export function DaySpreadSection({ coef, kcal, linked, onCoef }: { coef: Coef; k
             </View>
           ))}
         </View>
-        {!linked && <T size={11} c={color.sub} style={{ marginTop: 8 }}>日ごとの差は、有料プラン（体験中を含む）で目標に反映されます。</T>}
-
         <Pressable accessibilityRole="button" onPress={() => setOpen(!open)} style={{ height: 44, marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: hairline, borderTopColor: color.line }}>
           <T size={13}>細かく調整</T>
           <T size={13} c={color.sub}>{open ? '閉じる' : '開く'}</T>
@@ -77,7 +76,18 @@ function PercentRow({ t, value, kcal, max, onChange, sign }: { t: DayType; value
 }
 
 /** たんぱく質（毎日同じ量）：「体重1kgあたり 2.2 g」「1日 158 g（7日平均の体重から計算）」 */
-export function ProteinSection({ pk, weight, onPk }: { pk: number; weight: number; onPk: (pk: number) => void }) {
+export function ProteinSection({ pk, weight, onPk, fixedG }: { pk: number; weight: number; onPk: (pk: number) => void; fixedG?: number }) {
+  // コーチが決めたたんぱく質（g）があるときは、見るだけ
+  if (fixedG !== undefined) {
+    return (
+      <View>
+        <T size={11} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 6 }}>たんぱく質（毎日同じ量）</T>
+        <Card>
+          <CardRow title={`1日 ${fixedG} g`} meta={`体重1kgあたり ${(fixedG / Math.max(1, weight)).toFixed(1)} g（コーチが設定）`} minHeight={60} last right={<CoachBadge />} />
+        </Card>
+      </View>
+    );
+  }
   return (
     <View>
       <T size={11} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 6 }}>たんぱく質（毎日同じ量）</T>

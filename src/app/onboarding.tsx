@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Chip, ListRow, N, Notice, PrimaryButton, SectionLabel, Segmented, NumberStepper, T, color, hairline, radius } from '@/design-system';
 import { ACTIVITY_LEVELS, DEFAULT_PROFILE, GOAL_JP, checkWarnings, clampPace, defaultPace, initialTdee, paceOptions, weekKcalOf, type Goal, type Sex } from '../domain/nutrition';
 import { TRIAL_DAYS } from '../domain/entitlement';
+import { FREE_LAUNCH } from '../lib/flags';
 import { startWithSampleData } from '../dev/sampleData';
 import { latestBackupAt, restoreLatest } from '../services/backup';
 import { useStore } from '../store/store';
@@ -120,7 +121,7 @@ export default function Onboarding() {
       ))}
 
       <PrimaryButton label="はじめる" style={{ marginTop: 24 }} disabled={p.warnings.some((w) => w.code === 'below-floor')} onPress={() => complete({ sex, birthYear, heightCm, activity, goal, pace: p.pace, weight, goalWeight: goalW })} />
-      <T size={11} c={color.sub} style={{ marginTop: 10, textAlign: 'center' }}>はじめの{TRIAL_DAYS}日間は、有料の機能もすべて使えます。</T>
+      {!FREE_LAUNCH && <T size={11} c={color.sub} style={{ marginTop: 10, textAlign: 'center' }}>はじめの{TRIAL_DAYS}日間は、有料の機能もすべて使えます。</T>}
       {__DEV__ && (
         <Pressable accessibilityRole="button" onPress={() => void startWithSampleData()} style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center', marginTop: 10 }}>
           <T size={12} c={color.sub} style={{ textDecorationLine: 'underline' }}>（開発用）サンプルデータで始める（3週間分）</T>

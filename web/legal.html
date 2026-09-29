@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PLATE — 規約・プライバシー・サポート</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Barlow+Semi+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #FBF7F3; font-family: "Noto Sans JP", system-ui, sans-serif; color: #1F1712; -webkit-font-smoothing: antialiased; }
+  a { color: #1F1712; }
+  a:hover { color: #B5421C; }
+  .wrap { max-width: 760px; width: 100%; margin: 0 auto; padding: 0 24px; box-sizing: border-box; }
+  .tab { height: 36px; padding: 0 12px; border-radius: 6px; display: flex; align-items: center; font-size: 13px; cursor: pointer; background: transparent; color: #C9BCB1; border: none; font-family: inherit; }
+  .tab.active { background: #FBF7F3; color: #1F1712; }
+  .sec { display: flex; flex-direction: column; gap: 8px; padding: 22px 0; border-bottom: 0.5px solid #E9DFD6; }
+  .sec h2 { margin: 0; font-size: 17px; }
+  .sec p { margin: 0; font-size: 14.5px; line-height: 1.9; color: #3A2E26; }
+  .page { display: none; }
+  .page.active { display: block; }
+</style>
+</head>
+<body>
+<div style="display:flex;flex-direction:column">
+  <header style="background:#1F1712;color:#FBF7F3">
+    <div class="wrap" style="padding:20px 24px;display:flex;justify-content:space-between;align-items:center">
+      <a href="index.html" style="font:700 18px 'Barlow Semi Condensed';letter-spacing:4px;color:#FBF7F3;text-decoration:none">PLATE</a>
+      <nav style="display:flex;gap:4px;flex-wrap:wrap" id="tabs">
+        <button class="tab" data-page="privacy">プライバシー</button>
+        <button class="tab" data-page="terms">利用規約</button>
+        <button class="tab" data-page="law">特商法</button>
+        <button class="tab" data-page="support">サポート</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap" style="padding:40px 24px 60px;display:flex;flex-direction:column;gap:8px">
+    <div style="padding:10px 14px;background:#FDE9DF;border-radius:8px;font-size:12.5px;color:#B5421C;font-weight:700;line-height:1.6">下書き：公開前に、事業者情報を入れ、法律の専門家に確認してもらってください。</div>
+
+    <div id="page-privacy" class="page">
+      <h1 style="margin:18px 0 4px;font-size:28px;font-weight:900">プライバシーポリシー</h1>
+      <span style="font-size:12.5px;color:#8A7B70">最終更新日：2026年9月29日</span>
+      <div class="sec"><h2>1. 取得する情報</h2><p>プロフィール（性別、生まれた年、身長）、体重、食事とトレーニングの記録、メニュー、アカウント情報（Apple のアカウントに紐づくID、メールアドレス）。「コーチと共有」を使う場合は、承認した項目（食事・体重・トレーニング）と、コーチが送った目標・メニュー・ひとこと。</p><p>ヘルスケア連携をオンにした場合は、体重とワークアウトのデータをヘルスケアから読み込みます。</p></div>
+      <div class="sec"><h2>2. 利用目的</h2><p>食事とトレーニングの目標の計算、記録の表示、バックアップと機種変更時の引き継ぎ、問い合わせへの対応、アプリの改善のために使います。</p><p>ヘルスケアから取得したデータを、広告や第三者への販売に使うことはありません。</p></div>
+      <div class="sec"><h2>3. 写真と文章からの推定</h2><p>写真や文章から食事を推定する機能を使うと、その写真と文章を推定のために外部のAIサービスへ送信します。送信したデータは推定のためだけに使い、当方では保存しません。外部サービスでの取り扱いは、そのサービスの規約に従います（利用するサービス：Google の Gemini API）。</p></div>
+      <div class="sec"><h2>3-2. コーチとの共有（任意）</h2><p>コーチ機能は任意です。使わない場合、何も共有されません。共有は、招待コードを入れて<b>本人が承認したときに始まり</b>、承認するまでコーチには何も見えません。見せる項目（食事・体重・トレーニング）は項目ごとに選べ、オフにした項目は「非公開」と表示されます。写真・メモ・生年月日などのプロフィールは共有しません。共有はいつでもやめられ、やめるとコーチ側の共有データも削除されます。コーチが目標・メニューを決めた場合、その内容が設定に反映されます。コーチは利用者の1人であり、コーチが受け取った情報の取り扱いは、コーチ自身の責任で行われます。</p></div>
+      <div class="sec"><h2>4. 保存と削除</h2><p>記録は端末に保存し、ログインしている場合は暗号化してバックアップします。アプリの「設定 → アカウントを削除」から、アカウント、バックアップ、コーチとのつながり・共有データをいつでも削除できます。</p></div>
+      <div class="sec"><h2>5. 第三者への提供</h2><p>法令に基づく場合を除き、本人の同意なく第三者に提供しません。認証とバックアップに Supabase、AI推定に Google（Gemini API）、購読の管理と決済に RevenueCat と Apple を利用しています。</p></div>
+      <div class="sec" style="border-bottom:none"><h2>6. お問い合わせ</h2><p>tomozawa1997@gmail.com</p></div>
+    </div>
+
+    <div id="page-terms" class="page">
+      <h1 style="margin:18px 0 4px;font-size:28px;font-weight:900">利用規約</h1>
+      <span style="font-size:12.5px;color:#8A7B70">最終更新日：2026年9月29日</span>
+      <div class="sec"><h2>1. このアプリについて</h2><p>PLATE（以下「本アプリ」）は、トレーニングと食事の記録から、食事の目安を計算するアプリです。</p></div>
+      <div class="sec"><h2>2. 医療に関して</h2><p>本アプリが表示する数値はすべて目安であり、医療上の助言や診断ではありません。持病のある方、妊娠中の方、18歳未満の方は、医師などの専門家に相談してからご利用ください。</p></div>
+      <div class="sec"><h2>2-2. コーチ機能</h2><p>「コーチと共有」は任意で、本人の承認によって始まります。コーチは利用者の1人で、当方の従業員や代理人ではありません。コーチの助言・目標・メニューについて、当方は責任を負いません。合わないと感じたら、すぐにやめて、「ひとりで」に切り替えるか共有をやめてください。コーチとして使う方は、共有された情報を指導の目的以外に使ったり、他人に見せたりしてはいけません。</p></div>
+      <div class="sec"><h2>3. 料金</h2><p>現在、本アプリは無料で、すべての機能を使えます。将来、有料の機能や料金を設ける場合は、事前にアプリ内でお知らせします。お知らせなく、自動で課金されることはありません。</p></div>
+      <div class="sec"><h2>4. 禁止事項</h2><p>不正アクセス、リバースエンジニアリング、本アプリの運営を妨げる行為を禁止します。</p></div>
+      <div class="sec"><h2>5. 免責</h2><p>本アプリの利用によって生じた損害について、故意または重大な過失がある場合を除き、責任を負いません。</p></div>
+      <div class="sec" style="border-bottom:none"><h2>6. 規約の変更</h2><p>必要に応じて本規約を変更し、アプリ内またはこのページでお知らせします。</p></div>
+    </div>
+
+    <div id="page-law" class="page">
+      <h1 style="margin:18px 0 4px;font-size:28px;font-weight:900">特定商取引法に基づく表記</h1>
+      <span style="font-size:12.5px;color:#8A7B70">最終更新日：2026年9月29日</span>
+      <div class="sec"><h2>販売事業者</h2><p>宮澤知輝</p></div>
+      <div class="sec"><h2>所在地・電話番号</h2><p>請求があった場合に遅滞なく開示します。下記のメールアドレスまでご連絡ください。</p></div>
+      <div class="sec"><h2>お問い合わせ</h2><p>tomozawa1997@gmail.com</p></div>
+      <div class="sec"><h2>販売価格</h2><p>無料（現在、有料の商品やサービスはありません。提供を始める場合は、このページに表示します）</p></div>
+      <div class="sec"><h2>支払い方法・時期</h2><p>現在は該当しません（無料）。</p></div>
+      <div class="sec"><h2>提供時期</h2><p>アプリをインストールした直後から利用できます。</p></div>
+      <div class="sec" style="border-bottom:none"><h2>返品・キャンセル</h2><p>現在は該当しません（無料）。</p></div>
+    </div>
+
+    <div id="page-support" class="page">
+      <h1 style="margin:18px 0 4px;font-size:28px;font-weight:900">サポート</h1>
+      <span style="font-size:12.5px;color:#8A7B70">最終更新日：2026年9月29日</span>
+      <div class="sec">
+        <h2>よくある質問</h2>
+        <p>Q. 機種変更したら記録はどうなりますか？　A. ログインしていれば、新しい端末で同じアカウントにログインすると引き継げます。</p>
+        <p>Q. 機能が使えません。　A. アプリを最新版にして、いったん閉じてから開き直してください。それでも直らないときは、下のメールまでご連絡ください。</p>
+        <p>Q. 目標のカロリーはどう決まっていますか？　A. プロフィールと目標から維持カロリーを計算し、トレーニングの日に多く、オフの日に少なく配っています。週の合計は変わりません。</p>
+      </div>
+      <div class="sec" style="border-bottom:none"><h2>お問い合わせ</h2><p>解決しない場合は、下のボタンからメールでご連絡ください。お使いのiPhoneの機種とiOSのバージョンを書いていただくと、早く対応できます。</p></div>
+      <a href="mailto:tomozawa1997@gmail.com" style="margin-top:20px;height:52px;align-self:flex-start;padding:0 24px;border-radius:10px;background:#1F1712;color:#fff;display:flex;align-items:center;font-weight:700;font-size:15px;text-decoration:none">メールで問い合わせる</a>
+    </div>
+  </main>
+  <footer class="wrap" style="padding:0 24px 40px;font-size:12px;color:#8A7B70">© PLATE</footer>
+</div>
+<script>
+  var PAGES = ['privacy', 'terms', 'law', 'support'];
+  function show(page) {
+    if (PAGES.indexOf(page) < 0) page = 'privacy';
+    PAGES.forEach(function (p) {
+      document.getElementById('page-' + p).classList.toggle('active', p === page);
+    });
+    document.querySelectorAll('.tab').forEach(function (btn) {
+      btn.classList.toggle('active', btn.dataset.page === page);
+    });
+  }
+  document.getElementById('tabs').addEventListener('click', function (e) {
+    var btn = e.target.closest('.tab');
+    if (!btn) return;
+    location.hash = btn.dataset.page;
+  });
+  window.addEventListener('hashchange', function () { show(location.hash.slice(1)); });
+  show(location.hash.slice(1));
+</script>
+</body>
+</html>

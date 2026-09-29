@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PLATE — 筋トレと食事を、ひとつに</title>
+<meta name="description" content="トレーニングに合わせて、今日の食べる量が決まる。筋トレ記録とPFC管理をひとつにしたiOSアプリ、PLATE。">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #FBF7F3; font-family: "Noto Sans JP", system-ui, sans-serif; color: #1F1712; -webkit-font-smoothing: antialiased; }
+  a { color: #1F1712; text-decoration: none; }
+  a:hover { color: #B5421C; }
+  .num { font-family: "Barlow Semi Condensed", system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+  .wrap { width: 100%; max-width: 1080px; margin: 0 auto; padding: 0 24px; box-sizing: border-box; }
+  .card { background: #fff; border: 0.5px solid #E9DFD6; border-radius: 14px; padding: 18px; height: 210px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; }
+  .btn { height: 52px; padding: 0 26px; border-radius: 10px; background: #FBF7F3; color: #1F1712; display: inline-flex; align-items: center; font-weight: 700; font-size: 15px; }
+  @media (max-width: 640px) { .grid3 { grid-template-columns: 1fr !important; } .points { grid-template-columns: 1fr !important; } }
+</style>
+</head>
+<body>
+<div style="display:flex;flex-direction:column;font-variant-numeric:tabular-nums">
+
+<header style="background:#1F1712;color:#FBF7F3;position:relative;overflow:hidden;min-height:620px;display:flex;flex-direction:column">
+  <div class="wrap" style="position:relative;z-index:1;padding-top:22px;padding-bottom:22px;display:flex;justify-content:space-between;align-items:center">
+    <b class="num" style="font-size:18px;font-weight:700;letter-spacing:4px">PLATE</b>
+    <a href="#download" style="height:40px;padding:0 16px;border-radius:8px;border:1px solid #5A4D44;color:#FBF7F3;display:flex;align-items:center;font-size:13px;font-weight:700">App Store</a>
+  </div>
+  <div style="position:absolute;left:50%;top:110px;width:300px;height:300px;margin-left:-150px;border-radius:50%;background:#E85C31"></div>
+  <div style="position:absolute;left:0;right:0;top:250px;height:20px;background:#FBF7F3"></div>
+  <div style="flex:1"></div>
+  <div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:18px;padding:0 24px 56px;text-align:center">
+    <h1 style="margin:0;font-size:clamp(20px,3vw,26px);font-weight:700;line-height:1.6">筋トレ記録と食事管理を、ひとつに。</h1>
+    <a href="#download" class="btn">App Storeで入手</a>
+    <span style="font-size:12px;color:#A39386">iPhone　無料</span>
+  </div>
+</header>
+
+<section class="wrap" style="padding-top:80px;padding-bottom:20px;display:flex;flex-direction:column;gap:36px">
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <span class="num" style="font-size:13px;font-weight:600;letter-spacing:2px;color:#B5421C">ONE DAY</span>
+    <h2 style="margin:0;font-size:clamp(22px,3.4vw,30px);font-weight:900;line-height:1.45">トレーニングに合わせて、<br>今日の食べる量が決まる。</h2>
+  </div>
+  <div class="grid3" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:20px">
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <span class="num" style="font-size:14px;font-weight:600;color:#8A7B70;letter-spacing:1px">01　朝</span>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:12px;color:#8A7B70">今日の目標（目安）</span>
+          <span style="font-size:11px;font-weight:700;color:#B5421C;background:#FDE9DF;padding:4px 8px;border-radius:5px">脚の日・高</span>
+        </div>
+        <span class="num" style="font-size:52px;line-height:1;font-weight:600;letter-spacing:-1px">2,860<span style="font-family:'Noto Sans JP';font-size:14px;color:#8A7B70"> kcal</span></span>
+        <span style="font-size:12px;font-weight:700;color:#B5421C">脚の日 +250kcal</span>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;align-items:end;height:40px;margin-top:auto">
+          <div style="height:70%;background:#F7CDBB;border-radius:2px"></div>
+          <div style="height:48%;background:#E4DAD1;border-radius:2px"></div>
+          <div style="height:100%;background:#E85C31;border-radius:2px"></div>
+          <div style="height:48%;background:#E4DAD1;border-radius:2px"></div>
+          <div style="height:100%;background:#1F1712;border-radius:2px"></div>
+          <div style="height:70%;background:#F7CDBB;border-radius:2px"></div>
+          <div style="height:48%;background:#E4DAD1;border-radius:2px"></div>
+        </div>
+      </div>
+      <p style="margin:0;font-size:15px;line-height:1.8">週の予定から、今日の目標がもう決まっている。自分で計算しなくていい。</p>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <span class="num" style="font-size:14px;font-weight:600;color:#8A7B70;letter-spacing:1px">02　トレーニング後</span>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:12px;color:#8A7B70">この後の食事で</span>
+          <span style="font-size:11px;font-weight:700;color:#B5421C;background:#FDE9DF;padding:4px 8px;border-radius:5px">完了</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:6px">
+          <div style="display:flex;flex-direction:column;border-top:3px solid #D9434E;padding-top:8px"><span style="font-size:11px;font-weight:700;color:#5A4D44">P あと</span><span class="num" style="font-size:38px;line-height:1;font-weight:600">62<span style="font-size:14px">g</span></span></div>
+          <div style="display:flex;flex-direction:column;border-top:3px solid #E9A81F;padding-top:8px"><span style="font-size:11px;font-weight:700;color:#5A4D44">F あと</span><span class="num" style="font-size:38px;line-height:1;font-weight:600">24<span style="font-size:14px">g</span></span></div>
+          <div style="display:flex;flex-direction:column;border-top:3px solid #3A8FDB;padding-top:8px"><span style="font-size:11px;font-weight:700;color:#5A4D44">C あと</span><span class="num" style="font-size:38px;line-height:1;font-weight:600">170<span style="font-size:14px">g</span></span></div>
+        </div>
+        <span style="font-size:12px;color:#8A7B70;margin-top:auto">スクワット 122.5kg × 5　前回より +2.5kg</span>
+      </div>
+      <p style="margin:0;font-size:15px;line-height:1.8">記録を終えた瞬間に、残りのPFCがわかる。予定を変えた日も、自動で配り直す。</p>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <span class="num" style="font-size:14px;font-weight:600;color:#8A7B70;letter-spacing:1px">03　夜</span>
+      <div class="card" style="padding:6px 18px">
+        <div style="flex:1;display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:0.5px solid #E9DFD6">
+          <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:14px;font-weight:500">プロテイン＋バナナ</span><span class="num" style="font-size:12px;font-weight:500;color:#8A7B70">P25 F2 C28</span></div>
+          <span style="width:36px;height:36px;flex:none;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;background:#1F1712;color:#fff;border:0.5px solid #CFC3B8">✓</span>
+        </div>
+        <div style="flex:1;display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:0.5px solid #E9DFD6">
+          <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:14px;font-weight:500">鶏むね200g・米250g</span><span class="num" style="font-size:12px;font-weight:500;color:#8A7B70">P50 F4 C94</span></div>
+          <span style="width:36px;height:36px;flex:none;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;background:#fff;color:#1F1712;border:0.5px solid #CFC3B8">＋</span>
+        </div>
+        <div style="flex:1;display:flex;justify-content:space-between;align-items:center;gap:10px">
+          <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:14px;font-weight:500">ざっくり 600kcal</span><span class="num" style="font-size:12px;font-weight:500;color:#8A7B70">P38 F17 C75</span></div>
+          <span style="width:36px;height:36px;flex:none;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;background:#fff;color:#1F1712;border:0.5px solid #CFC3B8">＋</span>
+        </div>
+      </div>
+      <p style="margin:0;font-size:15px;line-height:1.8">いつもの食事は2タップ。写真や、ざっくりのkcalでも記録できる。</p>
+    </div>
+
+  </div>
+</section>
+
+<section class="wrap" style="padding:60px 24px">
+  <div class="points" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:1px;background:#E9DFD6;border:0.5px solid #E9DFD6;border-radius:14px;overflow:hidden">
+    <div style="background:#FBF7F3;padding:26px 24px;display:flex;flex-direction:column;gap:8px"><b style="font-size:17px">崩れても、戻れる</b><span style="font-size:14px;line-height:1.8;color:#5A4D44">記録は週○日で数えるので、1日空いても0に戻らない。翌朝「いつも通り」や「ざっくり」で埋められる。</span></div>
+    <div style="background:#FBF7F3;padding:26px 24px;display:flex;flex-direction:column;gap:8px"><b style="font-size:17px">ジムで押しやすい</b><span style="font-size:14px;line-height:1.8;color:#5A4D44">大きなボタンと1画面1操作。空いている機材から、順番を気にせず記録できる。</span></div>
+    <div style="background:#FBF7F3;padding:26px 24px;display:flex;flex-direction:column;gap:8px"><b style="font-size:17px">無料で全部使える</b><span style="font-size:14px;line-height:1.8;color:#5A4D44">いまは無料で、全部の機能を使えます。勝手に課金されることはありません。</span></div>
+  </div>
+</section>
+
+<section id="download" style="background:#1F1712;color:#FBF7F3">
+  <div class="wrap" style="padding:64px 24px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:28px">
+    <div style="display:flex;align-items:center;gap:18px">
+      <div style="width:72px;height:72px;border-radius:16px;background:#1F1712;position:relative;overflow:hidden;flex:none">
+        <div style="position:absolute;left:14px;top:14px;width:44px;height:44px;border-radius:50%;background:#E85C31"></div>
+        <div style="position:absolute;left:7px;right:7px;top:33px;height:5px;background:#FBF7F3"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <b class="num" style="font-size:26px;font-weight:700;letter-spacing:4px">PLATE</b>
+        <span style="font-size:14px;color:#C9BCB1">いまは無料で、全部の機能を使えます。</span>
+      </div>
+    </div>
+    <a href="#" class="btn">App Storeで入手</a>
+  </div>
+</section>
+
+<footer class="wrap" style="padding:28px 24px 40px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px;font-size:12.5px;color:#8A7B70">
+  <div style="display:flex;flex-wrap:wrap;gap:20px">
+    <a href="legal.html#privacy" style="color:#5A4D44">プライバシーポリシー</a>
+    <a href="legal.html#terms" style="color:#5A4D44">利用規約</a>
+    <a href="legal.html#law" style="color:#5A4D44">特定商取引法に基づく表記</a>
+    <a href="legal.html#support" style="color:#5A4D44">サポート</a>
+  </div>
+  <span>表示する数値はすべて目安です。食品データ：日本食品標準成分表（八訂）</span>
+</footer>
+</div>
+</body>
+</html>

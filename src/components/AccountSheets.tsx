@@ -2,14 +2,13 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { OutlineButton, PrimaryButton, Sheet, T, color, hairline } from '@/design-system';
-import { signInWithApple, signInWithGoogle, type AuthResult } from '../services/supabase';
+import { signInWithApple, type AuthResult } from '../services/supabase';
 import { backupLabel } from '../store/backupRunner';
 import { useStore } from '../store/store';
-import { AppleButton, OutlineAuthButton } from './AuthButtons';
+import { AppleButton } from './AuthButtons';
 
-/** ログインのシート：記録をバックアップして、機種変更しても引き継げる。Apple／Google／メール */
+/** ログインのシート：記録をバックアップして、機種変更しても引き継げる。Apple */
 export function LoginSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -31,17 +30,6 @@ export function LoginSheet({ open, onClose }: { open: boolean; onClose: () => vo
       </View>
       <View style={{ paddingHorizontal: 18, paddingTop: 16, gap: 10 }}>
         <AppleButton onPress={() => run(signInWithApple)} />
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <OutlineAuthButton label="Google" icon="google" onPress={() => run(signInWithGoogle)} />
-          <OutlineAuthButton
-            label="メール"
-            icon="mail"
-            onPress={() => {
-              onClose();
-              router.push({ pathname: '/login', params: { email: '1' } });
-            }}
-          />
-        </View>
         {error ? <T size={12} c={color.brandText}>{error}</T> : null}
       </View>
     </Sheet>

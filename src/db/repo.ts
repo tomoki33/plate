@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, isNull, notInArray, or, sql } from 'drizzle-orm';
-import { expandQuery, POPULAR_FOODS, rankFoods } from '../domain/foodSearch';
+import { expandQuery, findCatalogInQuery, POPULAR_FOODS, rankFoods } from '../domain/foodSearch';
 import type { Exercise, FoodItem, MealEntry, MealSet, ProfileData, SessionRecord, WorkoutTemplate } from '../domain/models';
 import type { DayType } from '../domain/types';
 import { bestSet } from '../domain/training';
@@ -266,10 +266,22 @@ export async function searchFoodsDb(query: string, limit = 30): Promise<FoodItem
     .select()
     .from(s.food)
     .where(and(alive(s.food), ...conds))
-    .orderBy(sql`CASE WHEN ${s.food.source} = '自作' THEN 0 ELSE 1 END`, popularCase, sql`length(${s.food.name})`)
+    .orderBy(sql`CASE ${s.food.source} WHEN '自作' THEN 0 WHEN 'カタログ' THEN 1 ELSE 2 END`, popularCase, sql`length(${s.food.name})`)
     .limit(400);
   // 関連の高い順に並べ替える（偶然の一致は落とす）
   return rankFoods(q, rows.map(toFood), limit);
+}
+
+/**
+ * 名前から食品を1件探す（AI入力・文章入力用）。
+ * 検索で見つからないとき、文章に含まれるカタログの名前・別名で探し直す
+ * （「鮭の塩焼き」「白いご飯」のように余計な言葉が付いていても拾う）。
+ */
+export async function searchFoodsSmart(query: string, limit = 1): Promise<FoodItem[]> {
+  const hits = await searchFoodsDb(query, limit);
+  if (hits.length) return hits;
+  const id = findCatalogInQuery(query);
+  return id ? getFoodsByIds([id]) : [];
 }
 
 export async function getFoodsByIds(ids: string[]): Promise<FoodItem[]> {
@@ -357,6 +369,10 @@ export async function insertDayTarget(row: { id: string; date: string; dayType: 
 export async function setKv(key: string, value: string, now = Date.now()) {
   await db.insert(s.kv).values({ key, value, updatedAt: now }).onConflictDoUpdate({ target: s.kv.key, set: { value, updatedAt: now } });
 }
+export async function getAllKv(): Promise<Record<string, string>> {
+  const rows = await db.select().from(s.kv);
+  return Object.fromEntries(rows.map((k) => [k.key, k.value]));
+}
 export async function deleteKv(key: string) {
   await db.delete(s.kv).where(eq(s.kv.key, key));
 }
@@ -378,6 +394,14 @@ export async function clearLogs() {
   await db.delete(s.kv).where(or(sql`${s.kv.key} LIKE 'ai:%'`, sql`${s.kv.key} LIKE 'dt:%'`)!);
 }
 
+// ---------------------------------------------------------------- 開発用：初回起動の状態に戻す
+
+/** 記録・設定・体験や課金の状態・コーチの設定まで、端末の中身を全部消す（開発用。ログアウトは呼び出し側） */
+export async function wipeEverything() {
+  await wipeUserData();
+  await db.delete(s.kv);
+}
+
 // ---------------------------------------------------------------- 全消去（データ削除）
 
 export async function wipeUserData() {
@@ -389,7 +413,8 @@ export async function wipeUserData() {
   await db.delete(s.paceSuggestion);
   await db.delete(s.mealSet);
   // 無料体験の開始日と課金状態は、データ削除では消さない（削除で体験が延びないように）
-  await db.delete(s.kv).where(notInArray(s.kv.key, ['trial_started_at', 'paid', 'sample_inserted']));
+  // コーチの設定（オン／オフ・コーチ名・つながり）はアカウントに付くものなので残す。反映済みの目標は消し、次の同期で入れ直す
+  await db.delete(s.kv).where(notInArray(s.kv.key, ['trial_started_at', 'paid', 'sample_inserted', 'coach_enabled', 'coach_mode', 'coach_name', 'coach_seen_note', 'coach_seen_plan', 'coach_link']));
   await db.delete(s.food).where(eq(s.food.source, '自作'));
   await db.delete(s.food).where(eq(s.food.source, 'AI'));
   await db.delete(s.profile);

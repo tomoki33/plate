@@ -10,13 +10,18 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import migrations from '../../drizzle/migrations';
 import { initDb } from '../db/client';
 import { runMigrations } from '../db/migrate';
+import { OfflineBanner } from '../components/OfflineBanner';
 import { ToastHost } from '../components/Toast';
 import { T, applyScheme, color, lightPalette } from '@/design-system';
-import { checkPaid, identifyBilling, initBilling } from '../services/billing';
+import { checkEntitlements, identifyBilling, initBilling } from '../services/billing';
+import { trackAppOpen } from '../services/analytics';
+import { planOf } from '../domain/entitlement';
 import { readBodyComposition } from '../services/healthkit';
 import { currentSession, onAccountChange, toAccount } from '../services/supabase';
 import { maybeAutoSample } from '../dev/sampleData';
+import { useCoachSync } from '../features/coach/useCoachSync';
 import { runBackup } from '../store/backupRunner';
+import { useCoach } from '../store/coachStore';
 import { useStore } from '../store/store';
 
 // 起動画面は、準備（フォント・DB・ログイン状態の確認）が終わるまで出したままにする
@@ -78,7 +83,7 @@ function App() {
   const bootError = useStore((s) => s.bootError);
   const onboarded = useStore((s) => s.profile.onboarded);
   const bootstrap = useStore((s) => s.bootstrap);
-  const setPaid = useStore((s) => s.setPaid);
+  const applyEntitlements = useStore((s) => s.applyEntitlements);
   const setAccount = useStore((s) => s.setAccount);
   const authChecked = useStore((s) => s.authChecked);
   const loginDone = useStore((s) => s.loginSkipped || !!s.account);
@@ -87,20 +92,33 @@ function App() {
   const healthSync = useStore((s) => s.healthSync);
   const showToast = useStore((s) => s.showToast);
   const setWeight = useStore((s) => s.setWeight);
+  const trialStartedAt = useStore((s) => s.trialStartedAt);
+  const paid = useStore((s) => s.paid);
+  const trialEndedSeen = useStore((s) => s.trialEndedSeen);
+  const firstOpenAt = useStore((s) => s.firstOpenAt);
   const prevAccount = useRef<string | null | undefined>(undefined);
+  const trialEndedShown = useRef(false);
+  const appOpenTracked = useRef(false);
 
   useEffect(() => {
     void bootstrap();
   }, [bootstrap]);
 
+  // 起動のたびに1回、計測を送る（D7・D30のリテンションの材料。README_launch 5章）
+  useEffect(() => {
+    if (!ready || firstOpenAt === null || appOpenTracked.current) return;
+    appOpenTracked.current = true;
+    trackAppOpen(Math.max(0, Math.floor((Date.now() - firstOpenAt) / 86400000)));
+  }, [ready, firstOpenAt]);
+
   // 課金の権利は起動時に確認する（キーが未設定なら何もしない）
   useEffect(() => {
     if (!ready) return;
     initBilling();
-    void checkPaid().then((paid) => {
-      if (paid) setPaid(true);
+    void checkEntitlements().then((e) => {
+      if (e.trialStartedAt !== null || e.paid || e.aiPlus) applyEntitlements(e);
     });
-  }, [ready, setPaid]);
+  }, [ready, applyEntitlements]);
 
   // ログイン状態は、起動時に一度確かめ、そのあとの変化（ログイン・ログアウト）も受け取る
   useEffect(() => {
@@ -122,21 +140,16 @@ function App() {
     };
   }, [ready, setAccount]);
 
-  // ログインしたら、バックアップを始める。ログイン中は、1日に1回、自動でバックアップする
+  // ログイン中は、1日に1回、自動でバックアップする。
+  // 初回のオンボーディングが済むまでは始めない：新しい端末でログインした直後は端末が空なので、
+  // ここで上書きすると、クラウドにある既存のバックアップ（復元したいもの）が消えてしまう。
   useEffect(() => {
     if (!authChecked) return;
     const id = account?.userId ?? null;
-    if (prevAccount.current === undefined) {
-      prevAccount.current = id;
-      if (id && (!lastBackupAt || Date.now() - lastBackupAt > 20 * 3600_000)) void runBackup();
-      return;
-    }
-    if (prevAccount.current === null && id) {
-      showToast('ログインしました。バックアップを始めます');
-      void runBackup();
-    }
+    if (prevAccount.current !== undefined && prevAccount.current === null && id && onboarded) showToast('ログインしました。バックアップを始めます');
     prevAccount.current = id;
-  }, [authChecked, account, lastBackupAt, showToast]);
+    if (id && onboarded && (!lastBackupAt || Date.now() - lastBackupAt > 20 * 3600_000)) void runBackup();
+  }, [authChecked, account, onboarded, lastBackupAt, showToast]);
 
   // 開発用：サンプルの自動投入（EXPO_PUBLIC_AUTO_SAMPLE=1 のときだけ）
   useEffect(() => {
@@ -150,10 +163,26 @@ function App() {
     void readBodyComposition(30).then((r) => r.rows.forEach((x) => setWeight(x.date, x.kg, { source: 'healthkit', bodyFat: x.bodyFatPct, silent: true })));
   }, [ready, healthSync, setWeight]);
 
-  const loaded = fontsLoaded && ready && authChecked;
+  // コーチモード：オン／オフと最後のモードを読み込む（読み込むまで、どちらの画面で開くか決められない）
+  const coachHydrated = useCoach((s) => s.hydrated);
+  useEffect(() => {
+    if (ready) void useCoach.getState().hydrate();
+  }, [ready]);
+  useCoachSync(ready && coachHydrated);
+
+  const loaded = fontsLoaded && ready && authChecked && coachHydrated;
   useEffect(() => {
     if (loaded || bootError) void SplashScreen.hideAsync().catch(() => {});
   }, [loaded, bootError]);
+
+  // 無料体験が終わった日（19c）：アプリを開いたときに1回だけ出す
+  useEffect(() => {
+    if (!loaded || !onboarded || trialEndedSeen || trialEndedShown.current) return;
+    if (planOf(Date.now(), trialStartedAt, paid) === 'view_only') {
+      trialEndedShown.current = true;
+      router.push('/trial-ended');
+    }
+  }, [loaded, onboarded, trialEndedSeen, trialStartedAt, paid, router]);
 
   if (bootError) return <ErrorView message={bootError} />;
   // 起動画面（黒地）の続きに見えるよう、準備中は黒地のままにする
@@ -166,12 +195,17 @@ function App() {
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.bg } }}>
           <Stack.Protected guard={onboarded}>
             <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="(coach)" />
+            <Stack.Screen name="coach-join" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="coach-link" options={{ presentation: 'modal' }} />
             <Stack.Screen name="weight" />
             <Stack.Screen name="template/[id]" options={{ presentation: 'modal' }} />
             <Stack.Screen name="my-foods" options={{ presentation: 'modal' }} />
             <Stack.Screen name="my-sets" options={{ presentation: 'modal' }} />
             <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
             <Stack.Screen name="data" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="delete-account" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="trial-ended" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
           </Stack.Protected>
           {/* ログイン（初回）→ オンボーディング → 本体。ログイン画面は、設定からも開ける */}
           <Stack.Protected guard={!onboarded && loginDone}>
@@ -182,6 +216,7 @@ function App() {
           </Stack.Protected>
         </Stack>
         <ToastHost />
+        <OfflineBanner />
       </View>
     </SafeAreaProvider>
   );

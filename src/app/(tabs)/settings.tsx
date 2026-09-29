@@ -2,12 +2,16 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Badge, Card, CardRow, Chip, InlineStepper, N, Notice, PrimaryButton, Segmented, Sheet, T, color, hairline, radius } from '@/design-system';
+import { useTopInset } from '../../components/coach/Frames';
+import { Badge, Bar, Card, CardRow, Chip, InlineStepper, N, Notice, PrimaryButton, Segmented, Sheet, T, color, hairline, radius } from '@/design-system';
 import { AccountSheetsHost } from '../../components/AccountSheets';
+import { CoachBadge } from '../../components/coach/CoachBits';
+import { CoachModeSection } from '../../components/coach/CoachModeSection';
 import { getFoodsByIds } from '../../db/repo';
 import type { FoodItem, MealSet } from '../../domain/models';
 import { DaySpreadSection, ProteinSection } from '../../components/DaySpread';
 import { useNow } from '../../components/useNow';
+import { TRIAL_DAYS } from '../../domain/entitlement';
 import { computeTargets } from '../../domain/engine';
 import { ACTIVITY_LEVELS, GOAL_JP, ageOf, bmr, checkWarnings, nearestActivity, paceOptions, type Goal } from '../../domain/nutrition';
 import { DAY_LABELS, DAY_TYPE_JP, type DayType } from '../../domain/types';
@@ -15,15 +19,18 @@ import { avg7 } from '../../domain/weight';
 import { readBodyComposition } from '../../services/healthkit';
 import { backupLabel } from '../../store/backupRunner';
 import { templateType, useWeek } from '../../store/selectors';
+import { FREE_LAUNCH } from '../../lib/flags';
+import { useCoach, useEngineOverrides, useIsManaged } from '../../store/coachStore';
 import { USUAL_SLOTS, useStore, type UsualSlot } from '../../store/store';
 
 const fmt = (n: number) => Math.round(n).toLocaleString();
 const typeColor = (t: DayType): string => (t === 'high' ? color.brand : t === 'normal' ? color.brandPale2 : color.off);
-const PLAN_JP = { free: '無料プラン', trial: '無料体験中', paid: '有料プラン' } as const;
-const PROVIDER_JP: Record<string, string> = { apple: 'Apple', google: 'Google', email: 'メール' };
+const PLAN_JP = { view_only: '見るだけ', trial: '無料体験中', paid: '購入済み' } as const;
+const PROVIDER_JP: Record<string, string> = { apple: 'Apple', email: 'メール' };
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
+  const topInset = useTopInset();
   const router = useRouter();
   const now = useNow();
   const w = useWeek(now);
@@ -35,19 +42,22 @@ export default function SettingsScreen() {
   const [sheet, setSheet] = useState<null | 'login' | 'logout'>(null);
   const [hk, setHk] = useState<string | null>(null);
   const [usualSlot, setUsualSlot] = useState<UsualSlot | null>(null);
+  const overrides = useEngineOverrides();
+  const managed = useIsManaged();
+  const managedPlan = useCoach((s) => s.managed);
 
   // 高い日・通常の日・オフの日の1日あたり kcal（日タイプ連動を使った場合の値）
   const dayKcal = useMemo(() => {
     const types: DayType[] = w.weekPlan.map((id) => templateType(w.templates, id));
-    const orig = computeTargets({ weekKcal: w.weekKcal, coef: profile.coef, pk: profile.pk, weight: w.weight, todayIndex: 0, plan: types, todayType: null, linked: true }).orig;
+    const orig = computeTargets({ weekKcal: w.weekKcal, coef: profile.coef, pk: profile.pk, weight: w.weight, todayIndex: 0, plan: types, todayType: null, linked: true, ...overrides }).orig;
     const pick = (t: DayType, fallback: number) => orig.find((d) => d.type === t)?.kcal ?? fallback;
     const normal = pick('normal', Math.round(w.weekKcal / 7));
     return { high: pick('high', Math.round(normal * profile.coef.high)), normal, off: pick('off', Math.round(normal * profile.coef.off)) };
-  }, [w.weekPlan, w.templates, w.weekKcal, w.weight, profile.coef, profile.pk]);
+  }, [w.weekPlan, w.templates, w.weekKcal, w.weight, profile.coef, profile.pk, overrides]);
 
   const warnings = checkWarnings(profile, w.weight, w.weekKcal, now);
   const opts = paceOptions(profile.goal, w.weight);
-  const trialLeft = st.trialStartedAt ? Math.max(0, Math.ceil((st.trialStartedAt + 14 * 86400000 - now.getTime()) / 86400000)) : 0;
+  const trialLeft = st.trialStartedAt ? Math.max(0, Math.ceil((st.trialStartedAt + TRIAL_DAYS * 86400000 - now.getTime()) / 86400000)) : 0;
   const avg = avg7(st.weights, now) ?? w.weight;
   const goalWeight = profile.goalWeightKg ?? Math.round((avg + (profile.goal === 'bulk' ? 3 : profile.goal === 'cut' ? -3 : 0)) * 2) / 2;
   const account = st.account;
@@ -84,8 +94,17 @@ export default function SettingsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: color.bg }}>
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: 30 }}>
+      <ScrollView contentContainerStyle={{ paddingTop: topInset + 8, paddingBottom: 30 }}>
         <T size={22} w={900} style={{ paddingHorizontal: 20 }}>設定</T>
+
+        {/* 一番上：無料体験中・見るだけのカード（購入済みなら出さない） */}
+        {w.entitlement !== 'paid' && (
+          <View style={{ marginHorizontal: 16, marginTop: 14, padding: 14, borderRadius: radius.card, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line, gap: 10 }}>
+            <T size={14} w={700}>{w.entitlement === 'trial' ? `無料体験中　あと${trialLeft}日` : '無料体験は終わりました'}</T>
+            <Bar pct={w.entitlement === 'trial' ? ((TRIAL_DAYS - trialLeft) / TRIAL_DAYS) * 100 : 100} fill={color.brand} height={4} />
+            <PrimaryButton label="買い切りで購入 ¥3,800" onPress={() => router.push('/paywall')} />
+          </View>
+        )}
 
         {/* 1. アカウント */}
         <View style={{ marginTop: 14 }}>
@@ -103,17 +122,20 @@ export default function SettingsScreen() {
                 <T size={14} w={700}>ログインしていません</T>
                 <T size={12} c={color.sub} style={{ lineHeight: 19 }}>記録はこの端末にだけ保存されています。機種変更に備えてバックアップできます。</T>
               </View>
-              <PrimaryButton label="ログインしてバックアップ" onPress={() => setSheet('login')} style={{ height: 48 }} />
+              <PrimaryButton label="ログイン" onPress={() => setSheet('login')} style={{ height: 48 }} />
             </Card>
           )}
         </View>
+
+        {/* コーチ（モードの切り替えと、コーチとの共有。コーチ機能を使わない人には、入口の1行だけ） */}
+        <CoachModeSection onLogin={() => setSheet('login')} />
 
         {/* 2. プロフィール（編集できる。変えると、目標がすぐ変わる） */}
         {label('プロフィール')}
         <Card>
           {profRow('性別', '', seg([{ value: 'male' as const, label: '男性' }, { value: 'female' as const, label: '女性' }], profile.sex, (v) => st.updateProfile({ sex: v }, w.weight)))}
-          {profRow('生まれた年', `${age}歳`, <InlineStepper value={`${profile.birthYear}年`} width={64} sub onDown={() => st.updateProfile({ birthYear: Math.max(1950, profile.birthYear - 1) }, w.weight)} onUp={() => st.updateProfile({ birthYear: Math.min(now.getFullYear() - 15, profile.birthYear + 1) }, w.weight)} />)}
-          {profRow('身長', '', <InlineStepper value={`${profile.heightCm} cm`} width={64} sub onDown={() => st.updateProfile({ heightCm: Math.max(130, profile.heightCm - 1) }, w.weight)} onUp={() => st.updateProfile({ heightCm: Math.min(220, profile.heightCm + 1) }, w.weight)} />)}
+          {profRow('生まれた年', `${age}歳`, <InlineStepper value={`${profile.birthYear}年`} width={64} size={16} onDown={() => st.updateProfile({ birthYear: Math.max(1950, profile.birthYear - 1) }, w.weight)} onUp={() => st.updateProfile({ birthYear: Math.min(now.getFullYear() - 15, profile.birthYear + 1) }, w.weight)} />)}
+          {profRow('身長', '', <InlineStepper value={`${profile.heightCm} cm`} width={64} size={16} onDown={() => st.updateProfile({ heightCm: Math.max(130, profile.heightCm - 1) }, w.weight)} onUp={() => st.updateProfile({ heightCm: Math.min(220, profile.heightCm + 1) }, w.weight)} />)}
           {profRow('体重', '記録の7日平均から自動', ro(`${w.weight.toFixed(1)} kg`))}
           {profRow('活動量', activity.note, seg(ACTIVITY_LEVELS.map((a) => ({ value: a.value, label: a.label })), activity.value, (v) => st.updateProfile({ activity: v }, w.weight)))}
           {profRow('基礎代謝（目安）', '上の内容から計算', ro(`${fmt(bmrNow)} kcal`))}
@@ -123,22 +145,22 @@ export default function SettingsScreen() {
         {/* 3. 目標 */}
         {label('目標')}
         <Card>
-          <CardRow title="目的" right={<T size={14} c={color.badgeFg}>{GOAL_JP[profile.goal]}　{goalOpen ? '˄' : '˅'}</T>} onPress={() => setGoalOpen(!goalOpen)} />
-          {goalOpen && (
+          <CardRow title="目的" right={managed ? <CoachBadge /> : <T size={14} c={color.badgeFg}>{GOAL_JP[profile.goal]}　{goalOpen ? '˄' : '˅'}</T>} meta={managed ? GOAL_JP[profile.goal] : undefined} onPress={managed ? undefined : () => setGoalOpen(!goalOpen)} />
+          {goalOpen && !managed && (
             <View style={{ padding: 12, borderBottomWidth: hairline, borderBottomColor: color.line }}>
               <Segmented value={profile.goal} onChange={(g: Goal) => st.updateProfile({ goal: g }, w.weight)} options={(['cut', 'maintain', 'bulk'] as const).map((g) => ({ value: g, label: GOAL_JP[g] }))} />
             </View>
           )}
           <CardRow
             title="目標体重"
-            right={<InlineStepper value={`${goalWeight.toFixed(1)} kg`} width={70} sub onDown={() => st.setGoalWeight(goalWeight - 0.5)} onUp={() => st.setGoalWeight(goalWeight + 0.5)} />}
+            right={managed ? <N size={17} w={600}>{goalWeight.toFixed(1)} kg</N> : <InlineStepper value={`${goalWeight.toFixed(1)} kg`} width={70} size={17} onDown={() => st.setGoalWeight(goalWeight - 0.5)} onUp={() => st.setGoalWeight(goalWeight + 0.5)} />}
           />
           <CardRow
             title="ペース"
-            right={<N size={17} w={600}>{profile.goal === 'maintain' ? '維持' : `${profile.pace > 0 ? '+' : '−'}${Math.abs(profile.pace).toFixed(2)} kg/週`}<T size={14} c={color.badgeFg}>　{paceOpen ? '˄' : '˅'}</T></N>}
-            onPress={() => profile.goal !== 'maintain' && setPaceOpen(!paceOpen)}
+            right={<N size={17} w={600}>{profile.goal === 'maintain' ? '維持' : `${profile.pace > 0 ? '+' : '−'}${Math.abs(profile.pace).toFixed(2)} kg/週`}{managed ? null : <T size={14} c={color.badgeFg}>　{paceOpen ? '˄' : '˅'}</T>}</N>}
+            onPress={managed ? undefined : () => profile.goal !== 'maintain' && setPaceOpen(!paceOpen)}
           />
-          {paceOpen && profile.goal !== 'maintain' && (
+          {paceOpen && !managed && profile.goal !== 'maintain' && (
             <View style={{ padding: 12, flexDirection: 'row', gap: 8, flexWrap: 'wrap', borderBottomWidth: hairline, borderBottomColor: color.line }}>
               {opts.map((o) => (
                 <Chip key={o} label={`${o > 0 ? '+' : '−'}${Math.abs(o).toFixed(2)}`} selected={Math.abs(o - profile.pace) < 0.005} onPress={() => st.updateProfile({ pace: o }, w.weight)} />
@@ -174,19 +196,19 @@ export default function SettingsScreen() {
         </Card>
 
         {/* 5. 日ごとの食べる量 */}
-        <DaySpreadSection coef={profile.coef} kcal={dayKcal} linked={w.features.linkedTargets} onCoef={(c) => st.setCoefs(c)} />
+        <DaySpreadSection coef={profile.coef} kcal={dayKcal} onCoef={(c) => st.setCoefs(c)} />
 
         {/* 6. たんぱく質（毎日同じ量） */}
-        <ProteinSection pk={profile.pk} weight={w.weight} onPk={(v) => st.setPkTo(v)} />
+        <ProteinSection pk={profile.pk} weight={w.weight} onPk={(v) => st.setPkTo(v)} fixedG={managed ? managedPlan?.proteinG : undefined} />
 
         {/* 7. 週間スケジュール */}
-        {label('週間スケジュール')}
+        {label(managed ? '週間スケジュール（コーチが設定）' : '週間スケジュール')}
         <Card>
           {w.weekPlan.map((id, i) => {
             const type = templateType(w.templates, id);
             return (
               <View key={i}>
-                <Pressable accessibilityRole="button" onPress={() => setEditDay(editDay === i ? null : i)} style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, borderBottomWidth: i === 6 && editDay !== i ? 0 : hairline, borderBottomColor: color.line }}>
+                <Pressable accessibilityRole="button" disabled={managed} onPress={() => setEditDay(editDay === i ? null : i)} style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, borderBottomWidth: i === 6 && editDay !== i ? 0 : hairline, borderBottomColor: color.line }}>
                   <T size={12} w={700} c={i === w.ti ? color.brandText : color.sub} style={{ width: 28 }}>{DAY_LABELS[i]}</T>
                   <T size={14} style={{ flex: 1 }}>{id ? (w.templates.find((t) => t.id === id)?.name ?? '—') : 'オフ'}</T>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -227,15 +249,17 @@ export default function SettingsScreen() {
         </Card>
         {hk && <T size={12} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 6 }}>{hk}</T>}
 
-        {label('プランとデータ')}
+        {label(FREE_LAUNCH ? 'データ' : 'プランとデータ')}
         <Card>
+          {!FREE_LAUNCH && (
           <CardRow
             title={PLAN_JP[w.entitlement]}
-            meta={w.entitlement === 'trial' ? `あと${trialLeft}日。体験が終わると、日タイプ連動などが有料になります` : w.entitlement === 'free' ? '目標は毎日同じ・AI入力は1日3回・レビューは直近2週' : 'すべての機能が使えます'}
+            meta={w.entitlement === 'trial' ? `あと${trialLeft}日。体験が終わると、新しい記録には購入が必要になります` : w.entitlement === 'view_only' ? '新しい記録はできません（過去の記録は見られます）' : 'すべての機能が使えます'}
             right={<T size={12} c={color.sub}>{w.entitlement === 'paid' ? '管理 ›' : 'プランを見る ›'}</T>}
             onPress={() => router.push('/paywall')}
             minHeight={60}
           />
+          )}
           <CardRow title="書き出し・バックアップ・削除" meta="CSV、バックアップ、記録の削除、出典" right={<T size={12} c={color.sub}>›</T>} onPress={() => router.push('/data')} minHeight={60} last />
         </Card>
 
@@ -245,14 +269,22 @@ export default function SettingsScreen() {
             <Pressable accessibilityRole="button" onPress={() => st.setPaid(!st.paid)} style={{ marginHorizontal: 16, height: 44, borderRadius: radius.button, borderWidth: hairline, borderColor: color.lineStrong, alignItems: 'center', justifyContent: 'center' }}>
               <T size={12} c={color.sub}>{w.entitlement === 'paid' ? '（開発用）有料をオフにする' : '（開発用）有料として扱う'}</T>
             </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => void st.devResetToFresh()} style={{ marginHorizontal: 16, marginTop: 8, height: 44, borderRadius: radius.button, borderWidth: hairline, borderColor: color.brandText, alignItems: 'center', justifyContent: 'center' }}>
+              <T size={12} w={700} c={color.brandText}>（開発用）初めて入れた状態に戻す</T>
+            </Pressable>
           </View>
         )}
 
-        {/* ログアウト（一番下。ログイン中だけ）：高さ56、白地に枠、太字のbrandText */}
+        {/* ログアウト（一番下。ログイン中だけ）：高さ56、白地に枠、太字のbrandText。その下に、小さな下線付きの「アカウントを削除」 */}
         {account && (
-          <Pressable accessibilityRole="button" onPress={() => setSheet('logout')} style={{ marginHorizontal: 16, marginTop: 8, marginBottom: 24, height: 56, alignItems: 'center', justifyContent: 'center', borderWidth: hairline, borderColor: color.line, borderRadius: radius.card, backgroundColor: color.surface }}>
-            <T size={15} w={700} c={color.brandText}>ログアウト</T>
-          </Pressable>
+          <View style={{ marginTop: 8, marginBottom: 24, gap: 10 }}>
+            <Pressable accessibilityRole="button" onPress={() => setSheet('logout')} style={{ marginHorizontal: 16, height: 56, alignItems: 'center', justifyContent: 'center', borderWidth: hairline, borderColor: color.line, borderRadius: radius.card, backgroundColor: color.surface }}>
+              <T size={15} w={700} c={color.brandText}>ログアウト</T>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => router.push('/delete-account')} style={{ alignSelf: 'center', minHeight: 44, justifyContent: 'center' }}>
+              <T size={12.5} c={color.sub} style={{ textDecorationLine: 'underline' }}>アカウントを削除</T>
+            </Pressable>
+          </View>
         )}
       </ScrollView>
 

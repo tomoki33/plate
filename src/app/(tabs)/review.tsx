@@ -2,7 +2,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Badge, N, Notice, T, color, hairline, radius } from '@/design-system';
+import { ReviewNoteCard } from '../../components/coach/CoachBanners';
+import { useTopInset } from '../../components/coach/Frames';
+import { Badge, N, T, color, hairline, radius } from '@/design-system';
 import { WeightChartView } from '../../components/WeightChart';
 import { useNow } from '../../components/useNow';
 import { addDays, dateKey } from '../../domain/dates';
@@ -21,6 +23,7 @@ const kgTimes = (kg: number) => (kg > 0 ? `${kg}kg × ` : '× ');
 
 export default function ReviewScreen() {
   const insets = useSafeAreaInsets();
+  const topInset = useTopInset();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const now = useNow();
@@ -32,17 +35,15 @@ export default function ReviewScreen() {
   const deleteSession = useStore((s) => s.deleteSession);
   const { date: dateParam } = useLocalSearchParams<{ date?: string }>();
 
-  const limitWeeks = w.features.reviewWeeks; // null は全期間
   const [weekBack, setWeekBack] = useState(1); // 1=先週
-  const [sel, setSel] = useState<string>(dateParam ?? w.todayKey);
+  const [sel, setSel] = useState<string>(dateParam || w.todayKey);
   const [confirm, setConfirm] = useState<string | null>(null);
   useEffect(() => {
     if (dateParam) setSel(dateParam);
   }, [dateParam]);
 
   const monday = addDays(w.dates[0], -7 * weekBack);
-  const locked = limitWeeks !== null && weekBack > limitWeeks;
-  const canOlder = limitWeeks === null ? weekBack < 52 : weekBack < limitWeeks;
+  const canOlder = weekBack < 52; // 最大52週さかのぼれる（過去の記録は、見るだけの状態でもすべて見られる）
   const weekLabel = weekBack === 1 ? '先週' : weekBack === 2 ? '2週前' : `${weekBack}週前`;
 
   // 直近4週のカレンダー（7列×4週。今週の月曜から3週前まで）
@@ -63,10 +64,11 @@ export default function ReviewScreen() {
   const selCell = cells.find((c) => c.key === sel);
   // カレンダーの外の日（履歴から開いた古い日）も出せる
   const selDay = selCell?.day ?? sessions.filter((x) => x.date === sel);
-  const selDate = new Date(sel.replace(/-/g, '/'));
+  const selDate = new Date((sel || w.todayKey).replace(/-/g, '/'));
+  const selDateValid = !Number.isNaN(selDate.getTime());
   const selFuture = sel > w.todayKey;
-  const selLabel = `${selDate.getMonth() + 1}/${selDate.getDate()}（${WD[selDate.getDay()]}）${sel === w.todayKey ? ' 今日' : ''}`;
-  const selPlanIdx = (selDate.getDay() + 6) % 7;
+  const selLabel = selDateValid ? `${selDate.getMonth() + 1}/${selDate.getDate()}（${WD[selDate.getDay()]}）${sel === w.todayKey ? ' 今日' : ''}` : '';
+  const selPlanIdx = selDateValid ? (selDate.getDay() + 6) % 7 : 0;
 
   const data = useMemo(() => {
     const targets = w.plan.days.map((d) => d.kcal);
@@ -83,12 +85,12 @@ export default function ReviewScreen() {
   const cellBg = (c: (typeof cells)[number]) => (c.type === 'high' ? color.brand : c.type === 'normal' ? color.brandPale2 : c.future ? 'transparent' : color.track);
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: color.bg }} contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: 40 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: color.bg }} contentContainerStyle={{ paddingTop: topInset + 8, paddingBottom: 40 }}>
       {/* 見出し：先週と、その期間 */}
       <View style={{ paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <T size={22} w={900}>{weekLabel}</T>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Pressable accessibilityRole="button" accessibilityLabel="さらに前の週" disabled={!canOlder && !(limitWeeks !== null && weekBack === limitWeeks)} onPress={() => setWeekBack((n) => n + 1)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: canOlder || (limitWeeks !== null && weekBack === limitWeeks) ? 1 : 0.3 }}>
+          <Pressable accessibilityRole="button" accessibilityLabel="さらに前の週" disabled={!canOlder} onPress={() => setWeekBack((n) => n + 1)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: canOlder ? 1 : 0.3 }}>
             <T size={18} c={color.sub}>‹</T>
           </Pressable>
           <N size={12} w={500} c={color.sub}>{md(dateKey(monday))}〜{md(dateKey(addDays(monday, 6)))}</N>
@@ -97,6 +99,7 @@ export default function ReviewScreen() {
           </Pressable>
         </View>
       </View>
+      <ReviewNoteCard />
 
       {/* トレーニング（直近4週）：回数と、カレンダー。マスは色だけ（高＝brand、通常＝薄い色、休み＝グレー、先の日は点線） */}
       <View style={{ paddingHorizontal: 20, paddingTop: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -198,37 +201,28 @@ export default function ReviewScreen() {
         </View>
       </Pressable>
 
-      {locked ? (
-        <View style={{ paddingHorizontal: 20, marginTop: 12 }}>
-          <Notice>無料プランでは、直近{limitWeeks}週までふりかえれます。これより前は有料プランで見られます。</Notice>
-          <Pressable accessibilityRole="button" onPress={() => router.push('/paywall')} style={{ minHeight: 44, justifyContent: 'center' }}>
-            <T size={13} w={700}>プランを見る ›</T>
-          </Pressable>
-        </View>
-      ) : (
-        /* 平均PFC（縦線が目標）。ペースの見直しと「先週は目標より+800kcal」の文は出さない（自己管理できる人が対象） */
-        <View style={{ paddingHorizontal: 20, paddingTop: 14, gap: 10 }}>
-          <T size={11} c={color.sub}>平均PFC（縦線が目標）</T>
-          {data.sum.loggedDays === 0 ? (
-            <T size={13} c={color.sub} style={{ paddingVertical: 8 }}>{weekLabel}の食事の記録がありません。</T>
-          ) : (
-            MACROS.map(([k, c]) => {
-              const a = data.sum.avg[k];
-              const t = data.tgt(k);
-              return (
-                <View key={k} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <T size={12} w={700} c={c} style={{ width: 22 }}>{k}</T>
-                  <View style={{ flex: 1, height: 6, backgroundColor: color.track, borderRadius: radius.bar }}>
-                    <View style={{ width: `${Math.max(0, Math.min(100, (a / (t * 1.2)) * 100))}%`, height: 6, backgroundColor: c, borderRadius: radius.bar }} />
-                    <View style={{ position: 'absolute', left: '83.3%', top: -3, bottom: -3, width: 1, backgroundColor: color.text }} />
-                  </View>
-                  <N size={15} w={600} style={{ minWidth: 64, textAlign: 'right' }}>{fmt(a)}/{fmt(t)}</N>
+      {/* 平均PFC（縦線が目標）。ペースの見直しと「先週は目標より+800kcal」の文は出さない（自己管理できる人が対象） */}
+      <View style={{ paddingHorizontal: 20, paddingTop: 14, gap: 10 }}>
+        <T size={11} c={color.sub}>平均PFC（縦線が目標）</T>
+        {data.sum.loggedDays === 0 ? (
+          <T size={13} c={color.sub} style={{ paddingVertical: 8 }}>{weekLabel}の食事の記録がありません。</T>
+        ) : (
+          MACROS.map(([k, c]) => {
+            const a = data.sum.avg[k];
+            const t = data.tgt(k);
+            return (
+              <View key={k} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <T size={12} w={700} c={c} style={{ width: 22 }}>{k}</T>
+                <View style={{ flex: 1, height: 6, backgroundColor: color.track, borderRadius: radius.bar }}>
+                  <View style={{ width: `${Math.max(0, Math.min(100, (a / (t * 1.2)) * 100))}%`, height: 6, backgroundColor: c, borderRadius: radius.bar }} />
+                  <View style={{ position: 'absolute', left: '83.3%', top: -3, bottom: -3, width: 1, backgroundColor: color.text }} />
                 </View>
-              );
-            })
-          )}
-        </View>
-      )}
+                <N size={15} w={600} style={{ minWidth: 64, textAlign: 'right' }}>{fmt(a)}/{fmt(t)}</N>
+              </View>
+            );
+          })
+        )}
+      </View>
     </ScrollView>
   );
 }

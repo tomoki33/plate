@@ -2,10 +2,13 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTopInset } from '../../components/coach/Frames';
 import { Badge, N, Notice, T, color, font, hairline, radius } from '@/design-system';
 import { getFoodsByIds } from '../../db/repo';
 import { ExercisePicker } from '../../components/ExercisePicker';
+import { NotificationPrompt } from '../../components/NotificationPrompt';
 import { useNow } from '../../components/useNow';
+import { sendWorkoutDoneNotification } from '../../services/notifications';
 import { shortExName } from '../../domain/exerciseNames';
 import type { SessionRecord, WorkoutTemplate } from '../../domain/models';
 import { DEFAULT_MEDIAN_VOLUME, estimate1RM, median } from '../../domain/training';
@@ -26,6 +29,7 @@ const REST_ACCENT = '#F7CDBB';
 
 export default function TrainingScreen() {
   const insets = useSafeAreaInsets();
+  const topInset = useTopInset();
   const router = useRouter();
   const now = useNow();
   const w = useWeek(now);
@@ -39,13 +43,36 @@ export default function TrainingScreen() {
   const setDayType = useStore((s) => s.setDayType);
   const showToast = useStore((s) => s.showToast);
   const setDoneOpen = useStore((s) => s.setDoneOpen);
+  const justCompleted = useStore((s) => s.justCompletedSession);
+  const clearJustCompleted = useStore((s) => s.clearJustCompletedSession);
+  const notifyPromptSeen = useStore((s) => s.notifyPromptSeen);
+  const markNotifyPromptSeen = useStore((s) => s.markNotifyPromptSeen);
+  const [notifyOpen, setNotifyOpen] = useState(false);
+
+  // 初めてトレーニングを完了した直後だけ、通知の許可の前の案内を出す（19f）。
+  // あとの完了でも、許可済みなら「あとP・C」の通知を送る（催促の通知は送らない）
+  useEffect(() => {
+    if (!justCompleted) return;
+    clearJustCompleted();
+    void sendWorkoutDoneNotification({ P: Math.max(0, Math.round(w.remaining.P)), C: Math.max(0, Math.round(w.remaining.C)) });
+    if (!notifyPromptSeen) setNotifyOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [justCompleted]);
 
   const scheduled = templates.find((t) => t.id === w.todayTemplateId) ?? null;
   const done = !!w.todayWorkout;
   const history = sessions.slice(-8).reverse();
   const exName = (id: string) => exercises.find((e) => e.id === id)?.name ?? '';
 
-  if (session) return <Recording insetsTop={insets.top} />;
+  if (session) return <Recording insetsTop={topInset} />;
+
+  /** 見るだけ（体験が終わって未購入）のときは、新しいトレーニングを始めさせず、購入の案内を出す */
+  const guardRecord = () => {
+    if (w.features.canRecord) return true;
+    router.push('/paywall');
+    return false;
+  };
+  const start = (templateId: string | null) => guardRecord() && startSession(templateId);
 
   /** そのメニューの前回の記録 */
   const lastOf = (t: WorkoutTemplate): SessionRecord | null => [...sessions].reverse().find((x) => x.templateId === t.id) ?? null;
@@ -69,7 +96,7 @@ export default function TrainingScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: color.bg }}>
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: 30 }}>
+      <ScrollView contentContainerStyle={{ paddingTop: topInset + 8, paddingBottom: 30 }}>
         <T size={22} w={900} style={{ paddingHorizontal: 20 }}>トレーニング</T>
 
         {done && (
@@ -95,14 +122,14 @@ export default function TrainingScreen() {
             {prevLabel(scheduled) && <T size={12} c={color.sub} style={{ marginBottom: -6 }}>{prevLabel(scheduled)}</T>}
             <View style={{ borderTopWidth: hairline, borderTopColor: color.line }}>
               {scheduled.exercises.map((e, i) => (
-                <View key={`${e.exerciseId}-${i}`} style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', borderBottomWidth: hairline, borderBottomColor: color.line }}>
+                <View key={`${e.exerciseId}-${i}`} style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, borderBottomWidth: hairline, borderBottomColor: color.line }}>
                   <N size={15} w={600} c={color.sub} style={{ width: 24 }}>{i + 1}</N>
-                  <T size={14} numberOfLines={1} style={{ flex: 1 }}>{exName(e.exerciseId)}</T>
-                  <N size={15} w={600} c={color.badgeFg}>{rowMeta(scheduled, i)}</N>
+                  <T size={14} style={{ flex: 1 }}>{exName(e.exerciseId)}</T>
+                  <N size={15} w={600} c={color.badgeFg} style={{ flexShrink: 0 }}>{rowMeta(scheduled, i)}</N>
                 </View>
               ))}
             </View>
-            <Pressable accessibilityRole="button" onPress={() => startSession(scheduled.id)} style={{ height: 64, borderRadius: radius.button, backgroundColor: color.text, alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable accessibilityRole="button" onPress={() => start(scheduled.id)} style={{ height: 64, borderRadius: radius.button, backgroundColor: color.text, alignItems: 'center', justifyContent: 'center' }}>
               <T size={16} w={700} c={color.onText}>開始</T>
             </Pressable>
           </View>
@@ -119,20 +146,20 @@ export default function TrainingScreen() {
         <T size={11} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 6 }}>{done ? 'もう1回トレーニングする' : '予定を変える'}</T>
         <View style={{ marginHorizontal: 16, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line, borderRadius: 12, overflow: 'hidden' }}>
           {others.map((t) => (
-            <ListLine key={t.id} height={64} title={t.name} meta={menuMeta(t)} badge={typeJp(t)} onPress={() => startSession(t.id)} />
+            <ListLine key={t.id} height={64} title={t.name} meta={menuMeta(t)} badge={typeJp(t)} onPress={() => start(t.id)} />
           ))}
-          <ListLine height={64} title="フリートレーニング" meta="種目をその場で選ぶ" badge="通常" onPress={() => startSession(null)} last={done || w.today.type === 'off'} />
+          <ListLine height={64} title="フリートレーニング" meta="種目をその場で選ぶ" badge="通常" onPress={() => start(null)} last={done || w.today.type === 'off'} />
           {!done && w.today.type !== 'off' && (
             <ListLine
               height={64}
               title="今日は休む"
-              meta={w.features.linkedTargets ? '残りの日に配り直す' : '目標は変わりません（無料プラン）'}
+              meta="残りの日に配り直す"
               badge="オフ"
               last
               onPress={() => {
                 const prev = useStore.getState().dayTypes[w.todayKey] ?? null;
                 setDayType(w.todayKey, 'off');
-                showToast(w.features.linkedTargets ? '今日をオフに変更。目標を配り直しました' : '今日をオフにしました', () => useStore.getState().setDayType(w.todayKey, prev));
+                showToast('今日をオフに変更。目標を配り直しました', () => useStore.getState().setDayType(w.todayKey, prev));
                 router.navigate('/');
               }}
             />
@@ -184,6 +211,7 @@ export default function TrainingScreen() {
         w={w}
         median={sessions.length > 3 ? median(sessions.filter((x) => x.id !== w.todayWorkout?.id).map((x) => x.volume)) : DEFAULT_MEDIAN_VOLUME}
       />
+      <NotificationPrompt visible={notifyOpen} onDone={() => { setNotifyOpen(false); markNotifyPromptSeen(); }} />
     </View>
   );
 }
@@ -239,7 +267,7 @@ function Recording({ insetsTop }: { insetsTop: number }) {
       mainAct = () => s.toggleSet(nu);
     } else if (!allDone) {
       const ni = ses.ex.findIndex((e, j) => j !== ses.cur && e.sets.some((x) => !x.done));
-      mainLabel = `次へ：${shortExName(ses.ex[ni].name)}`;
+      mainLabel = `次へ：${ses.ex[ni].name}`;
       mainAct = () => s.selectExercise(ni);
     } else {
       mainLabel = 'トレーニングを完了';
@@ -250,7 +278,7 @@ function Recording({ insetsTop }: { insetsTop: number }) {
   return (
     <View style={{ flex: 1, backgroundColor: color.bg }}>
       <ScrollView contentContainerStyle={{ paddingTop: insetsTop + 4, paddingBottom: 16 }}>
-        {/* 種目の列：どれを押しても切り替わる。右に固定の「＋」と「終える」 */}
+        {/* 種目の列：どれを押しても切り替わる。右に固定の「＋」と「終了」 */}
         <View style={{ paddingLeft: 14, paddingRight: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ gap: 6, paddingRight: 16 }}>
             {ses.ex.map((e, i) => {
@@ -258,7 +286,7 @@ function Recording({ insetsTop }: { insetsTop: number }) {
               const on = i === ses.cur;
               return (
                 <Pressable key={`${e.exerciseId}-${i}`} accessibilityRole="button" onPress={() => s.selectExercise(i)} style={{ height: 40, paddingHorizontal: 12, borderRadius: radius.button, borderWidth: hairline, borderColor: on ? color.text : all ? color.track : color.lineStrong, backgroundColor: on ? color.text : all ? color.track : color.surface, alignItems: 'center', justifyContent: 'center' }}>
-                  <T size={12.5} w={on ? 700 : 400} c={on ? color.onText : all ? color.sub : color.text}>{(all ? '✓ ' : '') + shortExName(e.name)}</T>
+                  <T size={12.5} w={on ? 700 : 400} c={on ? color.onText : all ? color.sub : color.text}>{(all ? '✓ ' : '') + e.name}</T>
                 </Pressable>
               );
             })}
@@ -267,7 +295,7 @@ function Recording({ insetsTop }: { insetsTop: number }) {
             <T size={20}>＋</T>
           </Pressable>
           <Pressable accessibilityRole="button" onPress={() => s.finishSession()} style={{ height: 44, paddingHorizontal: 4, justifyContent: 'center' }}>
-            <T size={14} w={700}>終える</T>
+            <T size={14} w={700}>終了</T>
           </Pressable>
         </View>
 
@@ -410,18 +438,13 @@ function DoneModal({ open, onClose, onMeal, w, median: med }: { open: boolean; o
           </View>
           <T size={12.5} c={color.badgeFg} style={{ paddingHorizontal: 22, marginTop: 12, lineHeight: 21 }}>
             残り{fmt(Math.max(0, rem.kcal))}kcal。ボリュームは普段の{ratio}倍。
-            {w.changed || !w.features.linkedTargets ? '' : `今日は予定どおり「${DAY_TYPE_JP[w.today.type]}」のまま。`}
+            {w.changed ? '' : `今日は予定どおり「${DAY_TYPE_JP[w.today.type]}」のまま。`}
           </T>
           {w.changed && (
             <View style={{ marginHorizontal: 22, marginTop: 14 }}>
               <Notice>
                 <T size={12.5} w={700} c={color.brandText}>目標を変更</T>　今日を「{DAY_TYPE_JP[w.today.type]}」に変更。今日 C{sign(dC)}{Math.abs(dC)}g、残りの日に {sign(restDiff)}{fmt(Math.abs(restDiff))}kcal を配り直しました。
               </Notice>
-            </View>
-          )}
-          {!w.features.linkedTargets && (
-            <View style={{ marginHorizontal: 22, marginTop: 14 }}>
-              <Notice tone="plain">無料プランでは、トレーニングの内容で目標は変わりません。日タイプ連動は有料プランで使えます。</Notice>
             </View>
           )}
           <View style={{ marginHorizontal: 22, marginTop: 18, borderTopWidth: hairline, borderTopColor: color.line }}>

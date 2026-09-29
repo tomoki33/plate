@@ -123,7 +123,7 @@ export const food = sqliteTable(
     p: real('p').notNull(),
     f: real('f').notNull(),
     c: real('c').notNull(),
-    source: text('source', { enum: ['成分表', '自作', 'AI'] }).notNull(),
+    source: text('source', { enum: ['成分表', 'カタログ', '自作', 'AI'] }).notNull(),
     /** 成分表の食品番号 */
     code: text('code'),
     /** 1個・1枚あたりのg */

@@ -73,11 +73,30 @@
           "photosPermission": "食事の写真を選んで、食べたものの栄養を推定するために、写真を使います。",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "scheme": "plate",
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "headers": {
+          "Cross-Origin-Embedder-Policy": "credentialless",
+          "Cross-Origin-Opener-Policy": "same-origin"
+        }
+      },
+      "eas": {
+        "projectId": "e503907a-9668-4c1f-85ec-d0d3cf4db828"
+      }
+    },
+    "owner": "tomoki33",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/e503907a-9668-4c1f-85ec-d0d3cf4db828"
     }
   }
 }

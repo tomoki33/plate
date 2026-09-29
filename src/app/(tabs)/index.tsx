@@ -1,8 +1,10 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Linking, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Badge, Bar, N, OutlineButton, PrimaryButton, T, color, hairline, radius } from '@/design-system';
+import { TodayCoachBanners } from '../../components/coach/CoachBanners';
+import { useTopInset } from '../../components/coach/Frames';
+import { Badge, Bar, N, OutlineButton, PrimaryButton, Sheet, T, color, hairline, radius } from '@/design-system';
 import { CameraIcon } from '../../components/AuthIcons';
 import { EditMealSheet } from '../../components/EditMealSheet';
 import { MealFlow, PhotoThumb } from '../../components/MealFlow';
@@ -27,6 +29,7 @@ const sign = (n: number) => (n >= 0 ? '+' : '−');
 
 export default function TodayScreen() {
   const insets = useSafeAreaInsets();
+  const topInset = useTopInset();
   const router = useRouter();
   const now = useNow();
   const w = useWeek(now);
@@ -46,6 +49,7 @@ export default function TodayScreen() {
   const showToast = useStore((s) => s.showToast);
   const [sheet, setSheet] = useState<null | 'meal'>(null);
   const [mode, setMode] = useState<0 | 1 | 2 | 3>(0);
+  const [cameraSheet, setCameraSheet] = useState(false);
   const { meal } = useLocalSearchParams<{ meal?: string }>();
 
   useEffect(() => {
@@ -89,8 +93,15 @@ export default function TodayScreen() {
   const viewWorkouts = useMemo(() => sessions.filter((x) => x.date === viewKey), [sessions, viewKey]);
   const viewWeight = weights[viewKey];
   const past = isPast;
-  const linked = w.features.linkedTargets;
-  const canRecord = isToday || isPast;
+  const canView = isToday || isPast;
+  const canRecord = w.features.canRecord;
+  /** 初日の今日タブ（19d）：まだ一度も食事を記録していない */
+  const isFirstDay = isToday && meals.length === 0;
+  const guardRecord = () => {
+    if (canRecord) return true;
+    router.push('/paywall');
+    return false;
+  };
   const viewRemaining = isToday ? w.remaining : { kcal: dd.kcal - viewEaten.kcal, P: dd.P - viewEaten.P, F: dd.F - viewEaten.F, C: dd.C - viewEaten.C };
   const dayLabel = `${viewDate.getMonth() + 1}/${viewDate.getDate()}（${DAY_LABELS[vd]}）`;
   const go = (week: number, day = vd) => setSel(week === 0 && day === w.ti ? null : { week, day });
@@ -107,14 +118,13 @@ export default function TodayScreen() {
     lineR = viewEaten.kcal ? `目標より ${sign(viewEaten.kcal - dd.kcal)}${fmt(Math.abs(viewEaten.kcal - dd.kcal))}kcal` : '下から追加できます';
   } else if (!isToday) {
     lineL = dd.type === 'off' ? 'トレーニングなし' : `予定：${templateName(w.templates, w.weekPlan[vd])}`;
-    lineR = linked ? (dd.type === 'off' ? 'Pは維持、Cを減らす' : '予定を変えたら残りの日に配り直し') : '';
+    lineR = dd.type === 'off' ? 'Pは維持、Cを減らす' : '予定を変えたら残りの日に配り直し';
   }
   // 残りkcalの下の1行：その日が通常の日より何kcal多い／少ないか。予定と違う日タイプになったら、変わったCを出す
   const sumM = w.planTypes.reduce((a, t) => a + w.profile.coef[t], 0);
   const normK = sumM ? (w.weekKcal * w.profile.coef.normal) / sumM : 0;
-  const why = !linked
-    ? ''
-    : isToday && weekBack === 0 && w.changed
+  const why =
+    isToday && weekBack === 0 && w.changed
       ? `目標を変更 C${sign(dC)}${Math.abs(dC)}g`
       : dd.type === 'normal'
         ? ''
@@ -132,7 +142,8 @@ export default function TodayScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: color.bg }}>
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 4, paddingBottom: 130 }}>
+      <ScrollView contentContainerStyle={{ paddingTop: topInset + 4, paddingBottom: 130 }}>
+        <TodayCoachBanners />
         <View style={{ paddingLeft: 10, paddingRight: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Pressable accessibilityRole="button" accessibilityLabel="前の週" disabled={weekBack >= 52} onPress={() => go(weekBack + 1)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: weekBack >= 52 ? 0.3 : 1 }}>
@@ -218,17 +229,11 @@ export default function TodayScreen() {
           </View>
         )}
 
-        {!linked && isToday && (
-          <Pressable accessibilityRole="button" onPress={() => router.push('/paywall')} style={{ marginHorizontal: 22, minHeight: 44, justifyContent: 'center', borderBottomWidth: hairline, borderBottomColor: color.line }}>
-            <T size={12} c={color.sub}>目標は毎日同じです。トレーニングに合わせて変わる「日タイプ連動」は有料プランで使えます。 <T size={12} w={700}>プランを見る ›</T></T>
-          </Pressable>
-        )}
-
-        {canRecord && (
+        {canView && (
           <>
             {/* 今日の記録：体重の行と、「いつも通り」「ざっくり」。常に同じ位置 */}
             <View style={{ marginTop: 16, marginHorizontal: 16, backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line, borderRadius: 12, paddingTop: 4, paddingHorizontal: 14, paddingBottom: 14, gap: 10 }}>
-              <Pressable accessibilityRole="button" onPress={() => setWeightDate(viewKey)} style={{ minHeight: 52, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, borderBottomWidth: hairline, borderBottomColor: color.line }}>
+              <Pressable accessibilityRole="button" onPress={() => guardRecord() && setWeightDate(viewKey)} style={{ minHeight: 52, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, borderBottomWidth: hairline, borderBottomColor: color.line }}>
                 <T size={14}>{isToday ? '体重' : `${dayLabel}の体重`}</T>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                   <N size={18} w={600} c={viewWeight !== undefined ? color.text : color.faint}>{viewWeight !== undefined ? `${viewWeight.toFixed(1)} kg` : '— kg'}</N>
@@ -238,9 +243,16 @@ export default function TodayScreen() {
                 </View>
               </Pressable>
               <View style={{ flexDirection: 'row', gap: 8 }}>
-                <PrimaryButton label="いつも通り" onPress={() => void addUsualMeals(viewKey)} style={{ flex: 1, borderRadius: 10 }} />
-                <OutlineButton label="ざっくり" onPress={() => openMeal(3)} style={{ flex: 1, borderRadius: 10 }} />
+                {isFirstDay ? (
+                  <View style={{ flex: 1, height: 52, borderRadius: 10, backgroundColor: color.off, alignItems: 'center', justifyContent: 'center' }}>
+                    <T size={14} w={700} c={color.faint}>いつも通り</T>
+                  </View>
+                ) : (
+                  <PrimaryButton label="いつも通り" onPress={() => guardRecord() && void addUsualMeals(viewKey)} style={{ flex: 1, borderRadius: 10 }} />
+                )}
+                <OutlineButton label="ざっくり" onPress={() => guardRecord() && openMeal(3)} style={{ flex: 1, borderRadius: 10 }} />
               </View>
+              {isFirstDay && <T size={11.5} c={color.sub}>数日記録すると使えるようになります</T>}
             </View>
 
             {/* その日のトレーニング（記録があれば） */}
@@ -254,7 +266,13 @@ export default function TodayScreen() {
             {/* 食事リスト（タップで編集） */}
             <View style={{ marginTop: 14, paddingHorizontal: 22 }}>
               <T size={11} c={color.sub}>食事 {viewGroups.length}件</T>
-              {viewGroups.length === 0 && <T size={13} c={color.sub} style={{ paddingVertical: 16 }}>まだ記録がありません。</T>}
+              {viewGroups.length === 0 && isToday ? (
+                <View style={{ marginTop: 10, paddingVertical: 20, borderWidth: hairline, borderStyle: 'dashed', borderColor: color.lineStrong, borderRadius: radius.card, alignItems: 'center' }}>
+                  <T size={13} c={color.sub}>まだ食事の記録がありません</T>
+                </View>
+              ) : viewGroups.length === 0 ? (
+                <T size={13} c={color.sub} style={{ paddingVertical: 16 }}>まだ記録がありません。</T>
+              ) : null}
               {viewGroups.map((g) => (
                 <View key={g.groupId} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', borderBottomWidth: hairline, borderBottomColor: color.line }}>
                   <Pressable accessibilityRole="button" accessibilityLabel={`${g.name}を編集`} onPress={() => setEditing(g)} style={{ flex: 1, minHeight: 48, flexDirection: 'row', alignItems: 'center' }}>
@@ -281,7 +299,9 @@ export default function TodayScreen() {
             accessibilityRole="button"
             accessibilityLabel="写真で記録"
             onPress={async () => {
+              if (!guardRecord()) return;
               const r = await pickPhoto('camera');
+              if (r.permissionDenied) return setCameraSheet(true);
               if (r.error) return showToast(r.error);
               if (!r.photo) return;
               setPhoto(r.photo);
@@ -293,14 +313,41 @@ export default function TodayScreen() {
           </Pressable>
         )}
         {isToday ? (
-          <OutlineButton label="食事を記録" onPress={() => openMeal(0)} style={{ flex: 1, borderRadius: 10 }} />
+          isFirstDay ? (
+            <PrimaryButton label="最初の食事を記録" onPress={() => guardRecord() && openMeal(0)} style={{ flex: 1, borderRadius: 10 }} />
+          ) : (
+            <OutlineButton label="食事を記録" onPress={() => guardRecord() && openMeal(0)} style={{ flex: 1, borderRadius: 10 }} />
+          )
         ) : (
           <>
-            {isPast && <OutlineButton label="この日に記録" onPress={() => openMeal(0)} style={{ flex: 1, borderRadius: 10 }} />}
+            {isPast && <OutlineButton label="この日に記録" onPress={() => guardRecord() && openMeal(0)} style={{ flex: 1, borderRadius: 10 }} />}
             <PrimaryButton label="今日に戻る" onPress={() => setSel(null)} style={{ flex: 1, borderRadius: 10 }} />
           </>
         )}
       </View>
+
+      {/* カメラの許可がないとき（19e）：設定を開くか、代わりの手段を出す。行き止まりにしない */}
+      <Sheet visible={cameraSheet} onClose={() => setCameraSheet(false)}>
+        <View style={{ paddingHorizontal: 18, paddingTop: 10, paddingBottom: 4 }}>
+          <T size={16} w={900}>カメラを使えません</T>
+          <T size={12.5} c={color.sub} style={{ marginTop: 4, lineHeight: 19 }}>カメラの許可がありません。設定から許可するか、代わりの方法で記録できます。</T>
+        </View>
+        <View style={{ paddingHorizontal: 18, paddingTop: 8, paddingBottom: 8, gap: 8 }}>
+          <PrimaryButton label="設定を開く" onPress={() => { setCameraSheet(false); void Linking.openSettings(); }} />
+          <OutlineButton
+            label="写真を選ぶ"
+            onPress={async () => {
+              setCameraSheet(false);
+              const r = await pickPhoto('library');
+              if (r.error) return showToast(r.error);
+              if (!r.photo) return;
+              setPhoto(r.photo);
+              openMeal(2);
+            }}
+          />
+          <OutlineButton label="文章で入力" onPress={() => { setCameraSheet(false); openMeal(2); }} />
+        </View>
+      </Sheet>
 
       <MealFlow
         open={sheet === 'meal'}

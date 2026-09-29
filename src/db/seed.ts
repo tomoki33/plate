@@ -1,7 +1,7 @@
-import { count, eq } from 'drizzle-orm';
+import { count, eq, sql } from 'drizzle-orm';
 import foodsJson from '../data/foods.json';
 import { SEED_ALIASES, SEED_EXERCISES, SEED_TEMPLATES, SEED_WEEK_PLAN } from '../domain/defaults';
-import { MY_FOOD_ALIASES, POPULAR_BY_CODE, SEED_MY_FOODS, searchKey } from '../domain/foodSearch';
+import { CATALOG, MY_FOOD_ALIASES, POPULAR_BY_CODE, SEED_MY_FOODS, catalogFoodId, catalogSearchText, searchKey } from '../domain/foodSearch';
 import { DEFAULT_PROFILE, defaultPk } from '../domain/nutrition';
 import { PART_COEF } from '../domain/training';
 import { db } from './client';
@@ -10,7 +10,7 @@ import * as s from './schema';
 type FoodRow = [string, string, string, number, number, number, number];
 
 /** 初期データの版。上げると、起動時に足りないものだけ追加する（ユーザーの編集は上書きしない） */
-const SEED_VERSION = 3;
+const SEED_VERSION = 4;
 
 const chunk = <T,>(xs: T[], n: number): T[][] => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
 
@@ -39,6 +39,31 @@ export async function seedIfNeeded(now = Date.now()): Promise<void> {
     updatedAt: now,
   }));
   for (const part of chunk(foodRows, 60)) await db.insert(s.food).values(part).onConflictDoNothing();
+
+  // 食品カタログ（日常の呼び名で引ける食品。値を直したときは版を上げれば更新される）
+  const catalogRows = CATALOG.map((r) => ({
+    id: catalogFoodId(r[0]),
+    name: r[1],
+    search: catalogSearchText(r),
+    kcal: r[3],
+    p: r[4],
+    f: r[5],
+    c: r[6],
+    source: 'カタログ' as const,
+    code: null, // 成分表の番号は一意なので、ここには入れない（成分表の行が持つ）
+    defaultG: r[7],
+    unitG: r[8],
+    updatedAt: now,
+  }));
+  for (const part of chunk(catalogRows, 40)) {
+    await db
+      .insert(s.food)
+      .values(part)
+      .onConflictDoUpdate({
+        target: s.food.id,
+        set: { name: sql`excluded.name`, search: sql`excluded.search`, kcal: sql`excluded.kcal`, p: sql`excluded.p`, f: sql`excluded.f`, c: sql`excluded.c`, defaultG: sql`excluded.default_g`, unitG: sql`excluded.unit_g`, updatedAt: now },
+      });
+  }
 
   // マイ食品
   const myIds: Record<string, string> = {};

@@ -99,7 +99,7 @@ export default function MenuEditor() {
                 <N size={15} w={600} c={color.sub}>{i + 1}</N>
               </Pressable>
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                <T size={14} w={500} numberOfLines={1}>{exName(r.exerciseId)}</T>
+                <T size={14} w={500}>{exName(r.exerciseId)}</T>
                 <N size={13} w={500} c={color.sub}>{meta(r)}</N>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', borderWidth: hairline, borderColor: color.lineStrong, borderRadius: 8, height: 40 }}>

@@ -9,6 +9,10 @@ import { searchKey } from '../domain/foodSearch';
 import { bestSet, decideDayType, median, volumeScore, DEFAULT_MEDIAN_VOLUME } from '../domain/training';
 import type { Coef, DayType, Pfc } from '../domain/types';
 import { signOut } from '../services/supabase';
+import { FREE_LAUNCH } from '../lib/flags';
+import { COACH_KV_KEYS, isManagedNow, useCoach } from './coachStore';
+import { startTrial as purchaseTrial } from '../services/billing';
+import { trackDayLogged, trackFirstTrainingCompleted, trackTrialStarted, type LoggedKind } from '../services/analytics';
 import { scaleMealEntry } from '../domain/meals';
 import { uuid } from '../lib/id';
 
@@ -79,8 +83,21 @@ interface State {
   aiUsed: Record<string, number>;
   /** 予定と違う今日の日タイプ（日付ごと） */
   dayTypes: Record<string, DayType>;
+  /** 初めて起動した日時（計測のD7・D30の基準。README_launch 5章） */
+  firstOpenAt: number | null;
   trialStartedAt: number | null;
+  /** 本体（買い切り）を購入済みか */
   paid: boolean;
+  /** AIプラス（任意のサブスク）が有効か */
+  aiPlus: boolean;
+  /** 課金なしで使える許可リストの状態（サーバーの comp_access）。paid・aiPlus は、これと購入状態の合算 */
+  comp: { paid: boolean; aiPlus: boolean };
+  /** 体験終了の案内（19c）を、もう見せたか */
+  trialEndedSeen: boolean;
+  /** 通知の許可の前の案内（19f）を、もう見せたか */
+  notifyPromptSeen: boolean;
+  /** 直前にトレーニングを完了したか（通知の案内を出すための一度きりの合図。永続化しない） */
+  justCompletedSession: boolean;
   /** 「ログインせずに始める」を選んだか */
   loginSkipped: boolean;
   account: { userId: string; email: string | null; provider: string } | null;
@@ -115,6 +132,8 @@ interface State {
   setCoefs(c: Coef): void;
   setPk(delta: number): void;
   setPkTo(value: number): void;
+  /** 値をそのまま反映する（コーチの目標プランの反映用。範囲の丸めや初期化をしない） */
+  patchProfile(patch: Partial<Pick<ProfileData, 'goal' | 'pace' | 'goalWeightKg' | 'pk'>>): void;
   maybeUpdateTdee(now: Date): void;
   recordTarget(date: string, target: { dayType: DayType; kcal: number; P: number; F: number; C: number }, reason: string): void;
 
@@ -187,11 +206,23 @@ interface State {
   setLastBackupAt(t: number): void;
 
   // 課金
+  /** 本体（買い切り）の購入状態を反映する */
   setPaid(v: boolean): void;
+  /** AIプラス（サブスク）の状態を反映する */
+  setAiPlus(v: boolean): void;
+  /** 課金の記録（RevenueCat）から、体験の開始日・購入・AIプラスをまとめて反映する */
+  applyEntitlements(e: { trialStartedAt: number | null; paid: boolean; aiPlus: boolean }): void;
+  /** 許可リストの状態を反映する（購入状態とは別に覚え、有効な間は paid・aiPlus を立てる） */
+  applyComp(c: { paid: boolean; aiPlus: boolean }): Promise<void>;
+  markTrialEndedSeen(): void;
+  markNotifyPromptSeen(): void;
+  clearJustCompletedSession(): void;
 
   showToast(text: string, undo?: () => void): void;
   hideToast(): void;
   eraseAllData(): Promise<void>;
+  /** 開発用：ログアウトし、端末の中身をすべて消して、初めて入れた人の状態に戻す */
+  devResetToFresh(): Promise<void>;
   /** ログアウト。wipe なら、この端末の記録も消す。ログイン画面へ戻れるよう、「ログインせずに始める」の選択は外す */
   logout(wipe: boolean): Promise<void>;
 }
@@ -215,8 +246,14 @@ export const useStore = create<State>()((set, get) => {
     myFoods: [],
     aiUsed: {},
     dayTypes: {},
+    firstOpenAt: null,
     trialStartedAt: null,
     paid: false,
+    aiPlus: false,
+    comp: { paid: false, aiPlus: false },
+    trialEndedSeen: false,
+    notifyPromptSeen: false,
+    justCompletedSession: false,
     loginSkipped: false,
     account: null,
     lastBackupAt: null,
@@ -236,6 +273,11 @@ export const useStore = create<State>()((set, get) => {
       try {
         await seedIfNeeded();
         await get().reload();
+        if (get().firstOpenAt === null) {
+          const t = Date.now();
+          set({ firstOpenAt: t });
+          persist(repo.setKv('first_open_at', String(t)));
+        }
       } catch (e) {
         log(e);
         set({ bootError: e instanceof Error ? e.message : String(e) });
@@ -262,8 +304,13 @@ export const useStore = create<State>()((set, get) => {
         myFoods: d.myFoods,
         aiUsed: d.aiUsed,
         dayTypes,
+        firstOpenAt: d.kv.first_open_at ? Number(d.kv.first_open_at) : null,
         trialStartedAt: d.kv.trial_started_at ? Number(d.kv.trial_started_at) : null,
-        paid: d.kv.paid === '1',
+        paid: FREE_LAUNCH || d.kv.paid === '1' || d.kv.comp_paid === '1',
+        aiPlus: d.kv.ai_plus === '1' || d.kv.comp_ai === '1',
+        comp: { paid: d.kv.comp_paid === '1', aiPlus: d.kv.comp_ai === '1' },
+        trialEndedSeen: d.kv.trial_ended_seen === '1',
+        notifyPromptSeen: d.kv.notify_prompt_seen === '1',
         loginSkipped: d.kv.login_skipped === '1',
         lastTargets: d.lastTargets,
         paceAnswers: d.paceAnswers,
@@ -278,6 +325,8 @@ export const useStore = create<State>()((set, get) => {
         ) as Record<UsualSlot, string | null>,
         lastBackupAt: d.kv.last_backup_at ? Number(d.kv.last_backup_at) : null,
       });
+      // 復元のあとにも、コーチの設定（オン／オフ・つながり）を読み直す
+      void useCoach.getState().hydrate();
     },
 
     // ------------------------------------------------------------ プロフィール
@@ -301,13 +350,27 @@ export const useStore = create<State>()((set, get) => {
         weekAdjustKcal: 0,
       };
       const isNewTrial = get().trialStartedAt === null;
-      set({ profile, trialStartedAt: get().trialStartedAt ?? now.getTime() });
+      const trialStartedAt = get().trialStartedAt ?? now.getTime();
+      set({ profile, trialStartedAt });
       saveProfileNow();
-      if (isNewTrial) persist(repo.setKv('trial_started_at', String(now.getTime())));
+      if (isNewTrial) {
+        persist(repo.setKv('trial_started_at', String(trialStartedAt)));
+        trackTrialStarted();
+        // 課金の設定が済んでいれば、0円の買い切り商品（4週間の無料体験）の購入記録に開始日を合わせる
+        void purchaseTrial().then((t) => {
+          if (t !== null && t !== get().trialStartedAt) get().applyEntitlements({ trialStartedAt: t, paid: get().paid, aiPlus: get().aiPlus });
+        });
+      }
       get().setWeight(dateKey(now), input.weight, { silent: true });
     },
 
-    updateProfile(patch, weightKg) {
+    updateProfile(patchIn, weightKg) {
+      // コーチが目標を管理している間は、目的とペースは変えられない
+      const patch = { ...patchIn };
+      if (isManagedNow()) {
+        delete patch.goal;
+        delete patch.pace;
+      }
       const cur = get().profile;
       const next: ProfileData = { ...cur, ...patch };
       const goalChanged = patch.goal !== undefined && patch.goal !== cur.goal;
@@ -338,7 +401,12 @@ export const useStore = create<State>()((set, get) => {
       set((s) => ({ profile: { ...s.profile, coef: { high: c.high, normal: c.normal, off: c.off } } }));
       saveProfileNow();
     },
+    patchProfile(patch) {
+      set((s) => ({ profile: { ...s.profile, ...patch } }));
+      saveProfileNow();
+    },
     setPkTo(value) {
+      if (isManagedNow()) return;
       set((s) => ({ profile: { ...s.profile, pk: Math.min(3, Math.max(1.6, round1(value))) } }));
       saveProfileNow();
     },
@@ -375,9 +443,11 @@ export const useStore = create<State>()((set, get) => {
       const now = new Date();
       const groupId = uuid();
       const slot: Slot = slotOf(now);
+      const date = opts.date ?? dateKey(now);
+      const inputType: InputType = opts.inputType ?? (opts.mealSetId ? 'set' : 'search');
       const rows: MealEntry[] = items.map((it, i) => ({
         id: uuid(),
-        date: opts.date ?? dateKey(now),
+        date,
         slot: opts.slot ?? slot,
         foodId: it.foodId,
         groupId,
@@ -390,11 +460,12 @@ export const useStore = create<State>()((set, get) => {
         C: it.C,
         ai: !!opts.ai,
         photoUri: opts.photoUri ?? null,
-        inputType: opts.inputType ?? (opts.mealSetId ? 'set' : 'search'),
+        inputType,
         createdAt: now.getTime() + i,
       }));
       set((s) => ({ meals: [...s.meals, ...rows] }));
       persist(repo.insertMeals(rows));
+      trackDayLogged(date, inputType as LoggedKind);
       get().showToast(`${groupName} を追加`, () => {
         set((s) => ({ meals: s.meals.filter((m) => m.groupId !== groupId) }));
         persist(repo.softDeleteMealGroup(groupId));
@@ -539,6 +610,7 @@ export const useStore = create<State>()((set, get) => {
     },
 
     setGoalWeight(kg) {
+      if (isManagedNow()) return;
       set((s) => ({ profile: { ...s.profile, goalWeightKg: Math.round(Math.min(200, Math.max(30, kg)) * 10) / 10 } }));
       saveProfileNow();
     },
@@ -601,6 +673,7 @@ export const useStore = create<State>()((set, get) => {
     // ------------------------------------------------------------ トレの設定
 
     setWeekPlan(weekday, templateId) {
+      if (isManagedNow()) return;
       const plan = get().weekPlan.slice();
       plan[weekday] = templateId;
       set({ weekPlan: plan });
@@ -793,9 +866,13 @@ export const useStore = create<State>()((set, get) => {
         memo: '',
         exercises: doneEx,
       };
-      set((s) => ({ session: null, rest: 0, doneOpen: true, sessions: [...s.sessions, rec], dayTypes: { ...s.dayTypes, [rec.date]: dayType } }));
+      set((s) => ({ session: null, rest: 0, doneOpen: true, justCompletedSession: true, sessions: [...s.sessions, rec], dayTypes: { ...s.dayTypes, [rec.date]: dayType } }));
       persist(repo.saveSession(rec, rec.exercises.flatMap((e) => e.sets.map(() => uuid()))));
       persist(repo.setKv(`dt:${rec.date}`, dayType));
+      if (sessions.length === 0) {
+        const firstOpenAt = get().firstOpenAt;
+        trackFirstTrainingCompleted(firstOpenAt !== null ? Math.max(0, Math.floor((now.getTime() - firstOpenAt) / 86400000)) : 0);
+      }
       return rec;
     },
     resumeSession() {
@@ -863,6 +940,37 @@ export const useStore = create<State>()((set, get) => {
       set({ paid: v });
       persist(v ? repo.setKv('paid', '1') : repo.deleteKv('paid'));
     },
+    setAiPlus(v) {
+      set({ aiPlus: v });
+      persist(v ? repo.setKv('ai_plus', '1') : repo.deleteKv('ai_plus'));
+    },
+    applyEntitlements(e) {
+      const comp = get().comp;
+      set({ trialStartedAt: e.trialStartedAt ?? get().trialStartedAt, paid: FREE_LAUNCH || e.paid || comp.paid, aiPlus: e.aiPlus || comp.aiPlus });
+      if (e.trialStartedAt !== null) persist(repo.setKv('trial_started_at', String(e.trialStartedAt)));
+      persist(e.paid ? repo.setKv('paid', '1') : repo.deleteKv('paid'));
+      persist(e.aiPlus ? repo.setKv('ai_plus', '1') : repo.deleteKv('ai_plus'));
+    },
+    async applyComp(c) {
+      const prev = get().comp;
+      if (prev.paid === c.paid && prev.aiPlus === c.aiPlus) return;
+      persist(c.paid ? repo.setKv('comp_paid', '1') : repo.deleteKv('comp_paid'));
+      persist(c.aiPlus ? repo.setKv('comp_ai', '1') : repo.deleteKv('comp_ai'));
+      // 許可が外れたときは、購入状態（kv に残っている RevenueCat の値）に戻す
+      const kv = await repo.getAllKv();
+      set({ comp: c, paid: FREE_LAUNCH || kv.paid === '1' || c.paid, aiPlus: kv.ai_plus === '1' || c.aiPlus });
+    },
+    markTrialEndedSeen() {
+      set({ trialEndedSeen: true });
+      persist(repo.setKv('trial_ended_seen', '1'));
+    },
+    markNotifyPromptSeen() {
+      set({ notifyPromptSeen: true });
+      persist(repo.setKv('notify_prompt_seen', '1'));
+    },
+    clearJustCompletedSession() {
+      set({ justCompletedSession: false });
+    },
 
     showToast(text, undo) {
       clearTimeout(toastTimer);
@@ -875,11 +983,22 @@ export const useStore = create<State>()((set, get) => {
     },
 
     /** データ削除：端末内の記録をすべて消し、初期状態（オンボーディング前）に戻す */
+    async devResetToFresh() {
+      clearInterval(restTimer);
+      await signOut().catch(() => {});
+      await repo.wipeEverything();
+      removeAllPhotos();
+      await seedIfNeeded();
+      useCoach.getState().reset();
+      set({ account: null, loginSkipped: false, session: null, rest: 0, doneOpen: false, toast: null, trialStartedAt: null, paid: FREE_LAUNCH, aiPlus: false, comp: { paid: false, aiPlus: false }, trialEndedSeen: false, notifyPromptSeen: false, firstOpenAt: null, lastBackupAt: null });
+      await get().reload();
+    },
     async eraseAllData() {
       clearInterval(restTimer);
       await repo.wipeUserData();
       removeAllPhotos();
       await seedIfNeeded();
+      useCoach.getState().setManaged(null);
       set({ session: null, rest: 0, doneOpen: false, toast: null });
       await get().reload();
     },
@@ -888,6 +1007,9 @@ export const useStore = create<State>()((set, get) => {
       await signOut().catch(() => {});
       set({ account: null, loginSkipped: false });
       persist(repo.deleteKv('login_skipped'));
+      // コーチの設定・共有はアカウントに付くもの。ログアウトしたら端末から外す（サーバー側の共有は、再ログインで戻る）
+      useCoach.getState().reset();
+      for (const k of COACH_KV_KEYS) persist(repo.deleteKv(k));
       if (wipe) await get().eraseAllData();
     },
   };

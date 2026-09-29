@@ -1,3 +1,5 @@
+import catalogJson from '../data/catalog.json';
+
 /**
  * 食品検索の正規化と別名辞書（純粋関数）。
  * 成分表の名前は「にわとり ［若どり・主品目］ むね 皮なし 生」のような表記なので、
@@ -238,6 +240,47 @@ const SYNONYMS: Record<string, string[][]> = Object.fromEntries(
   Object.entries(RAW_SYNONYMS).map(([k, v]) => [fold(k), v.map((and) => and.map(fold))]),
 );
 
+// ---- 食品カタログ（日常の呼び名 → 100gあたりの値） ----
+// scripts/catalog_spec.py を build-catalog.py で変換した src/data/catalog.json。
+// 成分表の名前（「にわとり ［若どり・主品目］ むね…」）とは別に、日常の名前と別名で引けるようにする。
+
+/** [key, 名前, 別名, kcal, P, F, C, 既定g, 1個g, 成分表番号|null] */
+export type CatalogRow = [string, string, string, number, number, number, number, number, number | null, string | null];
+export const CATALOG = catalogJson as CatalogRow[];
+export const catalogFoodId = (key: string) => `cat_${key}`;
+export const isCatalogFoodId = (id: string) => id.startsWith('cat_');
+
+interface CatalogKey {
+  id: string;
+  /** 検索用に正規化した名前・別名 */
+  keys: string[];
+}
+const CATALOG_KEYS: CatalogKey[] = CATALOG.map((r) => ({
+  id: catalogFoodId(r[0]),
+  keys: [r[1], ...r[2].split(/\s+/).filter(Boolean)].map(searchKey).filter(Boolean),
+}));
+
+/**
+ * 文章の中に含まれるカタログの名前・別名を探して、いちばん長く一致した食品の id を返す。
+ * 「鮭の塩焼き」「白いご飯」「茶碗一杯のご飯」のように、余計な言葉が付いても拾える。
+ * 1文字の別名（米・油）は、その語だけのときにしか使わない。
+ */
+export function findCatalogInQuery(query: string): string | null {
+  const q = searchKey(query);
+  if (!q) return null;
+  let best: { id: string; len: number } | null = null;
+  for (const c of CATALOG_KEYS) {
+    for (const k of c.keys) {
+      const hit = k.length >= 2 ? q.includes(k) : q === k;
+      if (hit && (!best || k.length > best.len)) best = { id: c.id, len: k.length };
+    }
+  }
+  return best?.id ?? null;
+}
+
+/** カタログの検索用文字列（名前＋別名）。food.search に入れる */
+export const catalogSearchText = (r: CatalogRow) => searchKey(`${r[1]} ${r[2]}`);
+
 /** 「よく使う」順の食品番号（既定gと1個あたりgつき）。空検索のときの候補と検索結果の並びに使う */
 export interface PopularFood {
   code: string;
@@ -414,11 +457,11 @@ function clauseIndex(query: string, name: string): number {
 
 export function rankFoods<T extends { id: string; name: string; source?: string }>(query: string, foods: T[], limit = 30): T[] {
   const popular = new Map(POPULAR_FOODS.map((p, i) => [`food_${p.code}`, i]));
-  const scored = foods.map((f) => ({ f, rel: relevance(query, f.name), idx: clauseIndex(query, f.name), pop: popular.get(f.id) ?? 999, mine: f.source === '自作' ? 0 : 1, proc: /缶詰|ジャム|漬|乾|加糖|即席|冷凍|甘露煮|つくだ煮|飲料/.test(f.name) ? 1 : 0, len: f.name.length }));
+  const scored = foods.map((f) => ({ f, rel: f.source === 'カタログ' ? 0 : relevance(query, f.name), idx: clauseIndex(query, f.name), pop: popular.get(f.id) ?? 999, tier: f.source === '自作' ? 0 : f.source === 'カタログ' ? 1 : 2, starts: searchKey(f.name).startsWith(searchKey(query)) ? 0 : 1, proc: /缶詰|ジャム|漬|乾|加糖|即席|冷凍|甘露煮|つくだ煮|飲料/.test(f.name) ? 1 : 0, len: f.name.length }));
   const hasGood = scored.some((x) => x.rel <= 2);
   return scored
     .filter((x) => !hasGood || x.rel <= 2)
-    .sort((a, b) => a.mine - b.mine || a.pop - b.pop || a.rel - b.rel || a.idx - b.idx || a.proc - b.proc || a.len - b.len)
+    .sort((a, b) => a.tier - b.tier || (a.tier === 1 ? a.starts - b.starts : 0) || a.pop - b.pop || a.rel - b.rel || a.idx - b.idx || a.proc - b.proc || a.len - b.len)
     .slice(0, limit)
     .map((x) => x.f);
 }

@@ -100,10 +100,10 @@ export function ExercisePicker({ open, onClose, onPick, usedIds = [] }: { open: 
           return (
             <Pressable key={e.id} accessibilityRole="button" disabled={used} onPress={() => pick(e)} style={{ minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderBottomWidth: hairline, borderBottomColor: color.line }}>
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                <T size={15} numberOfLines={1}>{e.name}</T>
+                <T size={15}>{e.name}</T>
                 <T size={11.5} c={color.sub} numberOfLines={1}>{e.part}{alias ? `・${alias}` : ''}</T>
               </View>
-              <T size={13} w={700} c={used ? color.sub : color.text} style={{ minWidth: 44, textAlign: 'center' }}>{used ? '追加済' : '＋'}</T>
+              <T size={13} w={700} c={used ? color.sub : color.text} style={{ minWidth: 44, textAlign: 'center', flexShrink: 0 }}>{used ? '追加済' : '＋'}</T>
             </Pressable>
           );
         })}

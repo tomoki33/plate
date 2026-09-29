@@ -4,7 +4,7 @@ import { Linking, Pressable, ScrollView, View } from 'react-native';
 import { ListRow, Notice, OutlineButton, PrimaryButton, SectionLabel, T, color } from '@/design-system';
 import { backupNow, latestBackupAt, restoreLatest } from '../services/backup';
 import { shareCsv } from '../services/exportCsv';
-import { deleteAccount, signOut, supabaseConfigured } from '../services/supabase';
+import { signOut, supabaseConfigured } from '../services/supabase';
 import { insertSampleData } from '../dev/sampleData';
 import { useStore } from '../store/store';
 
@@ -22,7 +22,7 @@ export default function DataScreen() {
   const [lastBackup, setLastBackup] = useState<number | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [confirm, setConfirm] = useState<'erase' | 'restore' | 'account' | null>(null);
+  const [confirm, setConfirm] = useState<'erase' | 'restore' | null>(null);
   const cloud = supabaseConfigured();
 
   const refresh = async () => {
@@ -54,7 +54,7 @@ export default function DataScreen() {
         </View>
 
         <View style={{ marginTop: 16 }}><SectionLabel>書き出し</SectionLabel></View>
-        <ListRow title="CSVで書き出す" meta="体重・食事・トレーニングの記録（無料でも使えます）" right={<T size={13} w={700}>書き出す</T>} minHeight={60} onPress={() => run(async () => ((await shareCsv()).ok ? null : '書き出せませんでした。'))} />
+        <ListRow title="CSVで書き出す" meta="体重・食事・トレーニングの記録" right={<T size={13} w={700}>書き出す</T>} minHeight={60} onPress={() => run(async () => ((await shareCsv()).ok ? null : '書き出せませんでした。'))} />
 
         <View style={{ marginTop: 22 }}><SectionLabel>バックアップ</SectionLabel></View>
         {!cloud ? (
@@ -102,14 +102,7 @@ export default function DataScreen() {
             <View style={{ marginTop: 22 }}><SectionLabel>アカウントの削除</SectionLabel></View>
             <T size={12} c={color.sub} style={{ marginTop: 6, lineHeight: 18 }}>ログイン情報と、クラウドのバックアップをすべて削除します。取り消せません。この端末の記録は残ります（消すときは、上の「すべての記録を削除」）。</T>
             <View style={{ marginTop: 8 }}>
-              <OutlineButton
-                label={confirm === 'account' ? 'もう一度押すと、アカウントを削除します' : 'アカウントを削除'}
-                onPress={() => {
-                  if (confirm !== 'account') return setConfirm('account');
-                  setConfirm(null);
-                  void run(async () => { const r = await deleteAccount(); return r.ok ? 'アカウントを削除しました。' : (r.error ?? 'できませんでした。'); });
-                }}
-              />
+              <OutlineButton label="アカウントを削除" onPress={() => router.push('/delete-account')} />
             </View>
           </>
         )}

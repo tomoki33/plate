@@ -1,11 +1,13 @@
 import { useMemo } from 'react';
 import { computeTargets } from '../domain/engine';
 import { addDays, dateKey, weekdayIndex, weekStart } from '../domain/dates';
-import { featuresOf, planOf, trialDaysLeft, type Features, type Plan } from '../domain/entitlement';
+import { featuresOf, planOf, trialDaysLeft, TRIAL_DAYS, type Features, type Plan } from '../domain/entitlement';
 import type { MealEntry, SessionRecord, WorkoutTemplate } from '../domain/models';
 import { ageOf, bmr, weekKcalOf } from '../domain/nutrition';
 import { avg7, etaLabel, etaTo, paceKgPerWeek, signed1, suggestPace, weekDiff, weightForProtein, type PaceSuggestion } from '../domain/weight';
 import type { DayTarget, DayType, Pfc } from '../domain/types';
+import { FREE_LAUNCH } from '../lib/flags';
+import { useEngineOverrides } from './coachStore';
 import { useStore } from './store';
 
 export const DEFAULT_WEIGHT = 70;
@@ -57,14 +59,15 @@ export function weightAverage7(weights: Record<string, number>, today: Date): nu
   return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
 }
 
-/** 無料／有料（体験中は有料と同じ） */
+/** 体験中／購入済み／見るだけ */
 export function usePlan(now: Date): { plan: Plan; features: Features; trialLeft: number } {
   const trialStartedAt = useStore((s) => s.trialStartedAt);
   const paid = useStore((s) => s.paid);
+  const aiPlus = useStore((s) => s.aiPlus);
   return useMemo(() => {
     const plan = planOf(now.getTime(), trialStartedAt, paid);
-    return { plan, features: featuresOf(plan), trialLeft: trialDaysLeft(now.getTime(), trialStartedAt) };
-  }, [now, trialStartedAt, paid]);
+    return { plan, features: featuresOf(plan, aiPlus, FREE_LAUNCH), trialLeft: trialDaysLeft(now.getTime(), trialStartedAt) };
+  }, [now, trialStartedAt, paid, aiPlus]);
 }
 
 export const templateName = (templates: WorkoutTemplate[], id: string | null) => (id ? (templates.find((t) => t.id === id)?.name ?? '—') : 'オフ');
@@ -80,6 +83,7 @@ export function useWeek(now: Date) {
   const meals = useStore((s) => s.meals);
   const sessions = useStore((s) => s.sessions);
   const { plan: entitlement, features } = usePlan(now);
+  const overrides = useEngineOverrides();
 
   const todayKey = dateKey(now);
   return useMemo(() => {
@@ -100,8 +104,8 @@ export function useWeek(now: Date) {
     });
 
     const override = dayTypes[todayKey] ?? null;
-    const changedType = features.linkedTargets && override && override !== planTypes[ti] ? override : null;
-    const input = { weekKcal, coef: profile.coef, pk: profile.pk, weight: kg, todayIndex: ti, plan: planTypes, actuals, linked: features.linkedTargets };
+    const changedType = override && override !== planTypes[ti] ? override : null;
+    const input = { weekKcal, coef: profile.coef, pk: profile.pk, weight: kg, todayIndex: ti, plan: planTypes, actuals, linked: true, ...overrides };
     const eng = computeTargets({ ...input, todayType: changedType });
     const planned = computeTargets({ ...input, actuals: [], todayType: null });
     const today: DayTarget = eng.days[ti];
@@ -111,7 +115,7 @@ export function useWeek(now: Date) {
     const todayWorkout: SessionRecord | null = sessions.filter((w) => w.date === todayKey).slice(-1)[0] ?? null;
     const todayTemplateId = weekPlan[ti];
     return { ti, dates, planTypes, eng, plan: planned, today, todayKey, todayMeals, eaten, remaining, weight: kg, latestWeight: latestKg, weightLogged: logged, changed: changedType !== null, todayWorkout, todayTemplateId, weekKcal, profile, weekPlan, templates, entitlement, features };
-  }, [now, profile, weekPlan, templates, weights, dayTypes, meals, sessions, todayKey, entitlement, features]);
+  }, [now, profile, weekPlan, templates, weights, dayTypes, meals, sessions, todayKey, entitlement, features, overrides]);
 }
 
 export interface WeightStats {
@@ -185,4 +189,54 @@ export function useWeightStats(now: Date): WeightStats {
       paceLine: pace !== null ? `直近2週 ${signed1(pace)}kg/週（予定 ${signed1(planned)}）` : null,
     };
   }, [weights, profile, paceAnswers, meals, now]);
+}
+
+export interface TrialSummary {
+  /** 記録した日／体験の日数（19c「記録した日 ○/28」） */
+  loggedDays: number;
+  totalDays: number;
+  /** 体重の7日平均の変化（kg）。記録が足りなければ null */
+  weightChange: number | null;
+  /** 主な種目（体験中もっとも多く記録した種目）の重さの伸び */
+  topLift: { name: string; deltaKg: number } | null;
+}
+
+/** 体験の4週間の成果（19c：無料体験が終わった日） */
+export function useTrialSummary(now: Date): TrialSummary {
+  const trialStartedAt = useStore((s) => s.trialStartedAt);
+  const meals = useStore((s) => s.meals);
+  const weights = useStore((s) => s.weights);
+  const sessions = useStore((s) => s.sessions);
+  return useMemo(() => {
+    const started = trialStartedAt ?? now.getTime() - TRIAL_DAYS * 86400000;
+    const days = Math.min(TRIAL_DAYS, Math.max(1, Math.round((now.getTime() - started) / 86400000)));
+    const mealDates = new Set(meals.map((m) => m.date));
+    let loggedDays = 0;
+    for (let i = 0; i < days; i++) if (mealDates.has(dateKey(addDays(now, -i)))) loggedDays++;
+
+    const avgNow = avg7(weights, now);
+    const avgStart = avg7(weights, addDays(now, -days));
+    const weightChange = avgNow !== null && avgStart !== null ? Math.round((avgNow - avgStart) * 10) / 10 : null;
+
+    const cutoff = dateKey(addDays(now, -days));
+    const recent = [...sessions].filter((s) => s.date >= cutoff).sort((a, b) => a.date.localeCompare(b.date));
+    const byExercise = new Map<string, { name: string; weights: number[] }>();
+    for (const s of recent) {
+      for (const e of s.exercises) {
+        const top = Math.max(0, ...e.sets.filter((x) => x.done).map((x) => x.kg));
+        if (top <= 0) continue;
+        const cur = byExercise.get(e.exerciseId) ?? { name: e.name, weights: [] };
+        cur.weights.push(top);
+        byExercise.set(e.exerciseId, cur);
+      }
+    }
+    let topLift: TrialSummary['topLift'] = null;
+    let bestCount = 1; // 2回以上の記録があるものだけ「伸び」を出す
+    for (const v of byExercise.values()) {
+      if (v.weights.length <= bestCount) continue;
+      bestCount = v.weights.length;
+      topLift = { name: v.name, deltaKg: Math.round((v.weights[v.weights.length - 1] - v.weights[0]) * 10) / 10 };
+    }
+    return { loggedDays, totalDays: days, weightChange, topLift };
+  }, [now, trialStartedAt, meals, weights, sessions]);
 }

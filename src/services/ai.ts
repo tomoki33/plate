@@ -1,5 +1,5 @@
-import { searchFoodsDb } from '../db/repo';
-import { parseQuantities } from '../domain/foodSearch';
+import { getFoodsByIds, searchFoodsDb, searchFoodsSmart } from '../db/repo';
+import { catalogFoodId, findCatalogInQuery, parseQuantities, relevance } from '../domain/foodSearch';
 import type { FoodItem } from '../domain/models';
 import type { PickedPhoto } from './photos';
 
@@ -11,8 +11,8 @@ export interface EstimateRow {
   /** 100gあたり（成分表・マイ食品の値。AIには直接PFCを出させない） */
   per100?: { kcal: number; p: number; f: number; c: number };
   foodId?: string;
-  /** 'table'：文章と成分表の照合、'ai'：AIが文章から推定、'photo'：写真から推定、'manual'：利用者が追加・差し替え */
-  origin?: 'table' | 'ai' | 'photo' | 'manual';
+  /** 'table'：文章と成分表の照合、'ai'：AIが文章から推定、'photo'：写真から推定、'estimate'：カタログにないので値もAIの目安、'manual'：利用者が追加・差し替え */
+  origin?: 'table' | 'ai' | 'photo' | 'estimate' | 'manual';
 }
 
 export interface EstimateResult {
@@ -56,7 +56,7 @@ async function resolve(name: string, grams: number, origin: EstimateRow['origin'
   return { token: name, name: food.name, grams: Math.max(1, Math.round(grams)), per100: { kcal: food.kcal, p: food.p, f: food.f, c: food.c }, foodId: food.id, origin };
 }
 
-export async function estimateLocal(text: string, search: (q: string) => Promise<FoodItem[]> = (q) => searchFoodsDb(q, 1)): Promise<EstimateRow[]> {
+export async function estimateLocal(text: string, search: (q: string) => Promise<FoodItem[]> = (q) => searchFoodsSmart(q, 1)): Promise<EstimateRow[]> {
   const rows: EstimateRow[] = [];
   for (const q of parseQuantities(text)) {
     const [food] = await search(q.word);
@@ -74,15 +74,46 @@ export async function estimateLocal(text: string, search: (q: string) => Promise
 async function sampleFromPhoto(text: string): Promise<EstimateRow[]> {
   const base = [{ q: '鶏むね', g: 150 }, { q: 'ごはん', g: 200 }, { q: '味噌汁', g: 180 }];
   const rows: EstimateRow[] = [];
-  for (const b of base) rows.push(await resolve(b.q, /半分/.test(text) && b.q === 'ごはん' ? b.g / 2 : b.g, 'photo', (q) => searchFoodsDb(q, 1)));
+  for (const b of base) rows.push(await resolve(b.q, /半分/.test(text) && b.q === 'ごはん' ? b.g / 2 : b.g, 'photo', (q) => searchFoodsSmart(q, 1)));
   // ひとことで足された食品
   if (text) for (const r of await estimateLocal(text)) if (r.foodId && !rows.some((x) => x.foodId === r.foodId)) rows.push({ ...r, origin: 'photo' });
   return rows;
 }
 
 interface RemoteItem {
+  /** カタログの key（AIが一覧から選んだもの）。無ければ null */
+  key?: string | null;
   name: string;
   grams: number;
+  /** カタログにないときだけ、AIが出す100gあたりの目安 */
+  kcal?: number;
+  protein?: number;
+  fat?: number;
+  carbs?: number;
+}
+
+const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+
+/** AIの返した1品を、カタログ → 名前の検索 → AIの目安の順で、食品に結びつける */
+async function resolveRemote(i: RemoteItem, origin: EstimateRow['origin']): Promise<EstimateRow> {
+  const grams = Math.max(1, Math.round(i.grams));
+  const row = (food: FoodItem): EstimateRow => ({ token: i.name, name: food.name, grams, per100: { kcal: food.kcal, p: food.p, f: food.f, c: food.c }, foodId: food.id, origin });
+  // 1. AIが選んだカタログの食品
+  const id = i.key ? catalogFoodId(i.key) : findCatalogInQuery(i.name);
+  if (id) {
+    const [food] = await getFoodsByIds([id]);
+    if (food) return row(food);
+  }
+  // 2. 名前の検索。合い具合が高いものだけ採る（「ちくわ」→「ちくわぶ」のような偶然の一致は採らない）
+  const [hit] = await searchFoodsDb(i.name, 1);
+  if (hit && (hit.source === 'カタログ' || relevance(i.name, hit.name) <= 1)) return row(hit);
+  // 3. カタログにない：AIの目安の値で残す（除外しない。確認画面で直せる）
+  if (num(i.kcal) && num(i.protein) && num(i.fat) && num(i.carbs) && i.kcal <= 950) {
+    return { token: i.name, name: i.name, grams, per100: { kcal: i.kcal, p: i.protein, f: i.fat, c: i.carbs }, origin: 'estimate' };
+  }
+  // 4. 値も無いときは、弱い一致でもあれば使う
+  if (hit) return row(hit);
+  return { token: i.name };
 }
 
 async function estimateRemote(text: string, photo: PickedPhoto | null, getToken?: () => Promise<string | null>): Promise<EstimateRow[]> {
@@ -97,8 +128,7 @@ async function estimateRemote(text: string, photo: PickedPhoto | null, getToken?
   if (!Array.isArray(json.items)) throw new Error('invalid response');
   const items = json.items.filter((i) => typeof i.name === 'string' && typeof i.grams === 'number' && i.grams > 0 && i.grams <= 3000);
   const origin = photo ? 'photo' : 'ai';
-  // PFC は AI に出させず、成分表・マイ食品の値から計算する
   const rows: EstimateRow[] = [];
-  for (const i of items) rows.push(await resolve(i.name, i.grams, origin, (q) => searchFoodsDb(q, 1)));
+  for (const i of items) rows.push(await resolveRemote(i, origin));
   return rows;
 }

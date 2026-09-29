@@ -6,11 +6,11 @@ import { PHOTO_DIR, photoFileName } from './photos';
 import { supabase } from './supabase';
 
 /**
- * 食事の写真のバックアップ（Supabase Storage の非公開バケット meal-photos、パスは <user_id>/<ファイル名>）。
+ * 食事の写真のバックアップ（Supabase Storage の非公開バケット plate-meal-photos、パスは <user_id>/<ファイル名>）。
  * 写真は端末に置いたまま、無いものだけ足す（すでに上げたものは、もう一度上げない）。
  * Web（確認用）は data URL で持つので対象外。
  */
-const BUCKET = 'meal-photos';
+const BUCKET = 'plate-meal-photos';
 
 async function remoteNames(uid: string): Promise<Set<string>> {
   const c = supabase()!;

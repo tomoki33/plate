@@ -8,7 +8,7 @@ import { WeightSheet } from '../components/WeightSheet';
 import { useNow } from '../components/useNow';
 import { addDays, dateKey } from '../domain/dates';
 import { buildWeightChart, signed1 } from '../domain/weight';
-import { useWeightStats } from '../store/selectors';
+import { usePlan, useWeightStats } from '../store/selectors';
 import { useStore } from '../store/store';
 
 const WD = ['日', '月', '火', '水', '木', '金', '土'];
@@ -22,9 +22,14 @@ export default function WeightDetail() {
   const { width } = useWindowDimensions();
   const now = useNow();
   const stats = useWeightStats(now);
+  const { features } = usePlan(now);
   const weights = useStore((s) => s.weights);
   const [range, setRange] = useState<Range>(30);
   const [sheetDate, setSheetDate] = useState<string | null>(null);
+  const openSheet = (key: string) => {
+    if (!features.canRecord) return router.push('/paywall');
+    setSheetDate(key);
+  };
 
   const first = useMemo(() => Object.keys(weights).sort()[0], [weights]);
   const allDays = first ? Math.min(365, Math.max(30, Math.round((now.getTime() - new Date(first).getTime()) / 86400000) + 1)) : 30;
@@ -56,7 +61,7 @@ export default function WeightDetail() {
           <T size={14} c={color.sub}>‹ レビュー</T>
         </Pressable>
         <T size={15} w={700}>体重</T>
-        <Pressable accessibilityRole="button" onPress={() => setSheetDate(todayKey)} style={{ height: 44, justifyContent: 'center', paddingHorizontal: 4 }}>
+        <Pressable accessibilityRole="button" onPress={() => openSheet(todayKey)} style={{ height: 44, justifyContent: 'center', paddingHorizontal: 4 }}>
           <T size={14} w={700}>＋ 入力</T>
         </Pressable>
       </View>
@@ -113,7 +118,7 @@ export default function WeightDetail() {
         <T size={11} c={color.sub} style={{ paddingHorizontal: 22, paddingTop: 16, paddingBottom: 4 }}>記録（直近30日・押すと修正）</T>
         <View style={{ paddingHorizontal: 22 }}>
           {records.map((r) => (
-            <Pressable key={r.key} accessibilityRole="button" onPress={() => setSheetDate(r.key)} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, borderBottomWidth: hairline, borderBottomColor: color.line }}>
+            <Pressable key={r.key} accessibilityRole="button" onPress={() => openSheet(r.key)} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, borderBottomWidth: hairline, borderBottomColor: color.line }}>
               <T size={13} c={r.i === 0 ? color.text : color.badgeFg} style={{ flex: 1 }}>{dayLabel(r.d)}{r.i === 0 ? ' 今日' : ''}</T>
               <N size={17} w={600} c={r.v !== undefined ? color.text : color.faint}>{r.v !== undefined ? r.v.toFixed(1) : '記録なし'}</N>
               <N size={13} w={500} c={color.sub} style={{ width: 60, textAlign: 'right' }}>{r.diff !== null ? signed1(r.diff) : ''}</N>

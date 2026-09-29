@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { db, sqlite } from '../db/client';
+import { backupFoods } from '../domain/backupFoods';
 import * as s from '../db/schema';
 import { downloadPhotos, uploadPhotos } from './photoSync';
 import { supabase } from './supabase';
@@ -10,19 +11,25 @@ import { supabase } from './supabase';
  *
  * 成分表（source=成分表）は本体に同梱されているので含めない。復元は「端末の記録を置き換える」。
  *
- * Supabase 側のテーブル（supabase/migrations/0001_backups.sql）:
+ * Supabase 側のテーブル（supabase/migrations/20260928190100_backups.sql）:
  *   backups(user_id uuid pk, payload jsonb, updated_at timestamptz)  + RLS: 本人の行だけ読み書きできる
  */
 export const BACKUP_VERSION = 1;
 
+
 export interface BackupPayload {
   version: number;
   createdAt: number;
+  /**
+   * 'merge'：端末の記録は消さず、入っていない行だけ足す（他のシステムからの移行用。含まれるテーブルだけを足す）。
+   * 省略または 'replace'：端末の記録をバックアップの内容に置き換える。
+   */
+  mode?: 'replace' | 'merge';
   tables: Record<string, unknown[]>;
 }
 
 export async function buildPayload(): Promise<BackupPayload> {
-  const foods = (await db.select().from(s.food)).filter((f) => f.source !== '成分表');
+  const foods = backupFoods(await db.select().from(s.food));
   return {
     version: BACKUP_VERSION,
     createdAt: Date.now(),
@@ -88,6 +95,16 @@ export async function applyPayload(p: BackupPayload): Promise<{ ok: boolean; err
   if (!p || p.version !== BACKUP_VERSION || typeof p.tables !== 'object') return { ok: false, error: '対応していないバックアップです' };
   const t = p.tables as Record<string, never[]>;
   try {
+    if (p.mode === 'merge') {
+      await sqlite.withTransactionAsync(async () => {
+        const add = async (table: never, rows: never[] | undefined) => {
+          for (let i = 0; i < (rows ?? []).length; i += 50) await db.insert(table).values((rows ?? []).slice(i, i + 50) as never).onConflictDoNothing();
+        };
+        await add(s.bodyLog as never, t.body_log);
+        await add(s.mealEntry as never, t.meal_entry);
+      });
+      return { ok: true };
+    }
     await sqlite.withTransactionAsync(async () => {
       const tx = db;
       await tx.delete(s.mealEntry);
@@ -111,7 +128,8 @@ export async function applyPayload(p: BackupPayload): Promise<{ ok: boolean; err
       await ins(s.exercise as never, t.exercise ?? []);
       await ins(s.workoutTemplate as never, t.workout_template ?? []);
       await ins(s.weekPlan as never, t.week_plan ?? []);
-      await ins(s.food as never, t.food ?? []);
+      // 成分表・カタログはアプリに入っているので戻さない（古いバックアップに入っていても読み飛ばす）
+      await ins(s.food as never, backupFoods((t.food ?? []) as { source: string }[]) as never[]);
       await ins(s.mealSet as never, t.meal_set ?? []);
       await ins(s.bodyLog as never, t.body_log ?? []);
       await ins(s.mealEntry as never, t.meal_entry ?? []);

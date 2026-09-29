@@ -12,12 +12,13 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
  * - P = 体重 × P係数（毎日同じ）、F = トレ日20%・オフ日25%（下限は体重×0.6g）、C = 残り全部
  */
 export function computeTargets(input: EngineInput): EngineResult {
-  const { weekKcal, coef, pk, weight, todayIndex: ti, plan, todayType, actuals = [], linked = true } = input;
+  const { weekKcal, coef, pk, weight, todayIndex: ti, plan, todayType, actuals = [], linked = true, fixedP, fatPct } = input;
   const m = (t: DayType) => (linked ? coef[t] : 1);
 
   const toPfc = (kcal: number, type: DayType): DayTarget => {
-    const P = Math.round(weight * pk);
-    const F = Math.max(Math.round((kcal * (type === 'off' ? 0.25 : 0.2)) / 9), Math.round(weight * 0.6));
+    const P = fixedP ?? Math.round(weight * pk);
+    const fRatio = fatPct !== undefined ? fatPct / 100 : type === 'off' ? 0.25 : 0.2;
+    const F = Math.max(Math.round((kcal * fRatio) / 9), Math.round(weight * 0.6));
     return { kcal: Math.round(kcal), P, F, C: Math.round((kcal - 4 * P - 9 * F) / 4), type };
   };
 

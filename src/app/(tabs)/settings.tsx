@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import * as Updates from 'expo-updates';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -264,6 +265,8 @@ export default function SettingsScreen() {
         </Card>
 
         <T size={11} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 14 }}>PLATE　数字はすべて目安で、医療的な助言ではありません。</T>
+        {/* 版の表示：問い合わせ・動作確認のとき、どの更新が入っているか分かるように */}
+        <T size={10.5} c={color.faint} style={{ paddingHorizontal: 20, paddingTop: 4 }}>{`v${Updates.runtimeVersion ?? '—'}・更新 ${Updates.updateId ? Updates.updateId.slice(0, 8) : '出荷時'}`}</T>
         {__DEV__ && (
           <View style={{ marginTop: 10 }}>
             <Pressable accessibilityRole="button" onPress={() => st.setPaid(!st.paid)} style={{ marginHorizontal: 16, height: 44, borderRadius: radius.button, borderWidth: hairline, borderColor: color.lineStrong, alignItems: 'center', justifyContent: 'center' }}>

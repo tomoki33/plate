@@ -44,8 +44,8 @@ export async function estimateMeal(input: { text: string; photo: PickedPhoto | n
     }
     try {
       return { rows: await estimateRemote(text, input.photo, getToken) };
-    } catch {
-      if (input.photo) return { rows: [], error: '通信できませんでした。もう一度お試しください。' };
+    } catch (e) {
+      if (input.photo) return { rows: [], ...photoErrorMessage(e) };
       // 文章だけなら、通信できないときはローカルの照合に切り替える
     }
   }
@@ -85,6 +85,23 @@ async function sampleFromPhoto(text: string): Promise<EstimateRow[]> {
   // ひとことで足された食品
   if (text) for (const r of await estimateLocal(text)) if (r.foodId && !rows.some((x) => x.foodId === r.foodId)) rows.push({ ...r, origin: 'photo' });
   return rows;
+}
+
+/** サーバーが返した失敗（ステータスで原因を分けて、画面に出す） */
+class EstimateHttpError extends Error {
+  constructor(public status: number) {
+    super(`estimate failed: ${status}`);
+  }
+}
+
+/** 写真の推定に失敗したときの、画面に出す文（原因が分かるもの。番号は、問い合わせのときの手がかり） */
+export function photoErrorMessage(e: unknown): { error: string; needsLogin?: boolean } {
+  const status = e instanceof EstimateHttpError ? e.status : null;
+  if (status === 401) return { error: 'ログインの有効期限が切れたようです。もう一度ログインしてください。', needsLogin: true };
+  if (status === 429) return { error: '今日の推定の回数を使い切りました。明日また使えます。' };
+  if (status === 413) return { error: '写真が大きすぎて送れませんでした。撮り直すか、文章で書いてください。' };
+  if (status !== null) return { error: `推定に失敗しました（エラー ${status}）。少し待って、もう一度お試しください。` };
+  return { error: '通信できませんでした。電波の良い場所で、もう一度お試しください。' };
 }
 
 interface RemoteItem {
@@ -130,7 +147,7 @@ async function estimateRemote(text: string, photo: PickedPhoto | null, getToken?
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify({ text, image_base64: photo?.base64, media_type: photo?.base64 ? 'image/jpeg' : undefined }),
   });
-  if (!res.ok) throw new Error(`estimate failed: ${res.status}`);
+  if (!res.ok) throw new EstimateHttpError(res.status);
   const json = (await res.json()) as { items?: RemoteItem[] };
   if (!Array.isArray(json.items)) throw new Error('invalid response');
   const items = json.items.filter((i) => typeof i.name === 'string' && typeof i.grams === 'number' && i.grams > 0 && i.grams <= 3000);

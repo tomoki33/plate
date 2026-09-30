@@ -101,7 +101,7 @@ function CoachJoinScreen() {
           </View>
           <T size={12} c={color.sub} style={{ paddingHorizontal: 22, lineHeight: 20 }}>写真・メモ・プロフィールは見せません。共有はいつでも止められます。コーチが決めた目標に従う設定になり、目標・ペース・たんぱく質・メニューは、コーチが決めた内容が入ります（「ひとりで」に戻せます）。</T>
           <T size={12} c={color.sub} style={{ paddingHorizontal: 22, paddingTop: 16, paddingBottom: 6 }}>コーチに表示される名前</T>
-          <TextInput value={myName} onChangeText={(v) => setMyName(v.slice(0, 30))} placeholder="例：大樹" placeholderTextColor={color.faint} style={{ marginHorizontal: 16, height: 52, borderWidth: hairline, borderColor: color.lineStrong, borderRadius: radius.input + 2, backgroundColor: color.surface, paddingHorizontal: 14, fontFamily: font.jp, fontSize: 16, color: color.text }} />
+          <TextInput value={myName} onChangeText={(v) => setMyName(v.slice(0, 30))} placeholder="例：たろう" placeholderTextColor={color.faint} style={{ marginHorizontal: 16, height: 52, borderWidth: hairline, borderColor: color.lineStrong, borderRadius: radius.input + 2, backgroundColor: color.surface, paddingHorizontal: 14, fontFamily: font.jp, fontSize: 16, color: color.text }} />
           {err ? <T size={12} c={color.brandText} style={{ paddingHorizontal: 22, paddingTop: 8 }}>{err}</T> : null}
         </ScrollView>
         <View style={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 12, gap: 6 }}>

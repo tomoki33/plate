@@ -17,7 +17,7 @@ const mk = (over: Partial<Snapshot> = {}, logged: string[] = [], p = 130): Snaps
   training: { sessions: [] },
   ...over,
 });
-const row = (s: Snapshot | null, over: Partial<StudentRow> = {}): StudentRow => ({ linkId: 'l', userId: 'u', studentName: '大樹', status: 'active', share: { meals: true, weight: true, training: true }, managesGoals: false, joinedAt: '2026-08-01T00:00:00Z', payload: s, payloadUpdatedAt: null, plan: null, lastNote: null, ...over });
+const row = (s: Snapshot | null, over: Partial<StudentRow> = {}): StudentRow => ({ linkId: 'l', userId: 'u', studentName: '生徒A', status: 'active', share: { meals: true, weight: true, training: true }, managesGoals: false, joinedAt: '2026-08-01T00:00:00Z', payload: s, payloadUpdatedAt: null, plan: null, lastNote: null, ...over });
 
 describe('日付キー', () => {
   it('月曜始まりの週', () => {

@@ -3,10 +3,10 @@
  * coach-hub（LINE の体重・食事記録）→ PLATE への移行。
  *
  *   # 読み取りだけ（書き込まない）。件数と変換結果を表示し、変換後の JSON を --out に書く
- *   node scripts/migrate-coach-hub.mjs --client 大樹 --out /path/to/payload.json
+ *   node scripts/migrate-coach-hub.mjs --client <表示名> --out /path/to/payload.json
  *
  *   # 書き込む：PLATE 側の利用者（Apple でサインイン済み）の user_id を指定する
- *   node scripts/migrate-coach-hub.mjs --client 大樹 --out ... --apply --uid <PLATE の user_id>
+ *   node scripts/migrate-coach-hub.mjs --client <表示名> --out ... --apply --uid <PLATE の user_id>
  *
  * 環境変数（値はコマンドに直接書かず、環境から渡す）:
  *   SRC_URL, SRC_KEY   coach-hub の Supabase の URL と service_role キー（読み取りだけに使う）

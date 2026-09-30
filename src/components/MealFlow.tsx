@@ -79,6 +79,7 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
   const [aiRows, setAiRows] = useState<EstimateRow[] | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [aiNeedsLogin, setAiNeedsLogin] = useState(false);
   const [quote, setQuote] = useState('');
   // 確認画面で、食品を追加（add）・差し替え（replace）するときの選択画面
   const [picker, setPicker] = useState<null | { mode: 'add' } | { mode: 'replace'; index: number }>(null);
@@ -192,10 +193,12 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
     setAiBusy(true);
     setAiError(null);
     try {
-      consumeAi(todayKey);
       const res = await estimateMeal({ text: aiText, photo }, accessToken);
+      setAiNeedsLogin(!!res.needsLogin);
       if (res.error) setAiError(res.error);
       else {
+        // 推定できたときだけ、今日の回数を使う（失敗や、ログイン待ちでは減らさない）
+        consumeAi(todayKey);
         setQuote(aiText.trim() ? `「${aiText.trim()}」` : '写真のみ');
         setAiRows(res.rows);
       }
@@ -421,7 +424,12 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
               <T size={12} c={color.sub} style={{ paddingHorizontal: 18, paddingTop: 10, lineHeight: 19 }}>
                 {photo ? '写真とひとことから' : '写真を撮るか、食べたものを書くと'}PFCを推定します。追加する前に必ず確認画面が出ます。今日はあと{aiLeft}回（写真と文章の合計）。
               </T>
-              {aiError && <T size={12} c={color.brandText} style={{ paddingHorizontal: 18, paddingTop: 8 }}>{aiError}</T>}
+              {aiError && <T size={12} c={color.brandText} style={{ paddingHorizontal: 18, paddingTop: 8, lineHeight: 19 }}>{aiError}</T>}
+              {aiNeedsLogin && (
+                <Pressable accessibilityRole="button" onPress={() => { onClose(); router.push('/login'); }} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 18 }}>
+                  <T size={13} w={700}>ログインする ›</T>
+                </Pressable>
+              )}
               {aiLeft === 0 && (
                 <View style={{ paddingHorizontal: 18, paddingTop: 8 }}>
                   <Notice>{FREE_LAUNCH ? '今日の回数を使い切りました。明日また使えます。食べたものは、検索でも記録できます。' : '今日の回数を使い切りました。AIプラスなら1日30回まで使えます。'}</Notice>

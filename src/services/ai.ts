@@ -17,6 +17,8 @@ export interface EstimateRow {
 
 export interface EstimateResult {
   rows: EstimateRow[];
+  /** ログインが必要で推定できなかった（画面に「ログインする」を出す） */
+  needsLogin?: boolean;
   /** 推定できなかった理由（画面に出す） */
   error?: string;
 }
@@ -35,6 +37,11 @@ const DEV_PHOTO_MOCK = __DEV__ && !AI_ENDPOINT;
 export async function estimateMeal(input: { text: string; photo: PickedPhoto | null }, getToken?: () => Promise<string | null>): Promise<EstimateResult> {
   const text = input.text.trim();
   if (AI_ENDPOINT) {
+    // 写真の推定はサーバー（ログイン済みの人だけ受け付ける）で行う。ログインしていなければ、通信せずに理由を伝える
+    const token = getToken ? await getToken() : null;
+    if (!token && input.photo) {
+      return { rows: [], needsLogin: true, error: '写真の推定には、ログインが必要です。ログインするか、食べたものを文章で書いてください（文章はログインなしでも推定できます）。' };
+    }
     try {
       return { rows: await estimateRemote(text, input.photo, getToken) };
     } catch {

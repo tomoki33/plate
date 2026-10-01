@@ -177,6 +177,9 @@ export default function SettingsScreen() {
             last
           />
         </Card>
+        <Pressable accessibilityRole="link" onPress={() => router.push('/sources')} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 20 }}>
+          <T size={12} c={color.sub} style={{ textDecorationLine: 'underline' }}>この目標の計算の根拠と出典 ›</T>
+        </Pressable>
         {warnings.map((x) => (
           <View key={x.code} style={{ marginHorizontal: 16, marginTop: 8 }}><Notice>{x.text}</Notice></View>
         ))}
@@ -261,6 +264,7 @@ export default function SettingsScreen() {
             minHeight={60}
           />
           )}
+          <CardRow title="計算の根拠と出典" meta="基礎代謝・ペース・たんぱく質などの元の資料" right={<T size={12} c={color.sub}>›</T>} onPress={() => router.push('/sources')} minHeight={60} />
           <CardRow title="書き出し・バックアップ・削除" meta="CSV、バックアップ、記録の削除、出典" right={<T size={12} c={color.sub}>›</T>} onPress={() => router.push('/data')} minHeight={60} last />
         </Card>
 

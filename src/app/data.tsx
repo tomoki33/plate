@@ -117,6 +117,7 @@ export default function DataScreen() {
         )}
 
         <View style={{ marginTop: 22 }}><SectionLabel>出典・注意</SectionLabel></View>
+        <ListRow title="計算の根拠と出典" meta="基礎代謝・ペース・たんぱく質などの元の資料" right={<T size={13} w={700}>見る</T>} minHeight={60} onPress={() => router.push('/sources')} />
         <T size={11} c={color.sub} style={{ marginTop: 6, lineHeight: 17 }}>
           食品の栄養成分：文部科学省「日本食品標準成分表（八訂）」を加工して作成。{'\n'}
           表示する数値はすべて目安で、効果を保証するものではありません。医療的な助言はしません。{'\n'}

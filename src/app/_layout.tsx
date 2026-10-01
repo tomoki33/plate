@@ -204,6 +204,7 @@ function App() {
             <Stack.Screen name="my-sets" options={{ presentation: 'modal' }} />
             <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
             <Stack.Screen name="data" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="sources" options={{ presentation: 'modal' }} />
             <Stack.Screen name="delete-account" options={{ presentation: 'modal' }} />
             <Stack.Screen name="trial-ended" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
           </Stack.Protected>

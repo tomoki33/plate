@@ -183,7 +183,9 @@ export default function TodayScreen() {
 
         {/* 残りkcal */}
         <View style={{ paddingHorizontal: 22, marginTop: 18 }}>
-          <T size={11} c={color.sub}>{kcalLabel}</T>
+          <Pressable accessibilityRole="link" accessibilityLabel="目標の計算の根拠と出典" onPress={() => router.push('/sources')} hitSlop={8}>
+            <T size={11} c={color.sub}>{kcalLabel}　<T size={11} c={color.sub} style={{ textDecorationLine: 'underline' }}>根拠と出典 ›</T></T>
+          </Pressable>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
             <N size={60} w={600} c={isToday && rem.kcal < 0 ? color.brandText : color.text} style={{ lineHeight: 60, letterSpacing: -1 }}>
               {fmt(kcalBig)}

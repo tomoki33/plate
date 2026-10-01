@@ -23,11 +23,12 @@
 
 ## B. 外部サービス（アカウントが必要）
 1. **Supabase**（無料枠で可）
-   - **他アプリと同じプロジェクトに相乗りする場合は `supabase db push` を使わない**：CLIのマイグレーション履歴（バージョン番号）はプロジェクト単位で共有され、各リポジトリの `supabase/migrations/` はお互いの存在を知らないため、バージョン番号の衝突や「Remote migration versions not found」のようなズレが起きる（実際に発生した）。代わりに、ダッシュボードの SQL Editor で `supabase/migrations/*.sql` の中身をそのまま貼って実行する（順番に：`20260928190100_backups.sql` → `20260928190200_meal_photos.sql`）。これならCLIの履歴管理に触れないので、相手のマイグレーション状態を壊さない
+   - **他アプリと同じプロジェクトに相乗りする場合は `supabase db push` を使わない**：CLIのマイグレーション履歴（バージョン番号）はプロジェクト単位で共有され、各リポジトリの `supabase/migrations/` はお互いの存在を知らないため、バージョン番号の衝突や「Remote migration versions not found」のようなズレが起きる（実際に発生した）。代わりに、ダッシュボードの SQL Editor で `supabase/migrations/*.sql` の中身をそのまま貼って実行する（順番に：`20260928190100_backups.sql` → `20260928190200_meal_photos.sql` → … → `20261002000000_ai_global_quota.sql`。新しいものは、Edge Function を再デプロイする前に適用する）。これならCLIの履歴管理に触れないので、相手のマイグレーション状態を壊さない
    - 単独の新規プロジェクトを使う場合は、通常どおり `supabase link` → `supabase db push --linked` でよい
    - Authentication → Providers：Apple（Client IDs に `app.plate.pfc`）を有効化。ログインは Apple のみ（Google・メールは提供しない。メールのコード送付には独自SMTPが要るため）
    - `supabase functions deploy estimate-meal` / `delete-account`
    - `supabase secrets set GEMINI_API_KEY=...`
+   - Gemini の費用の上限と予算アラートは、下の「Gemini の費用管理」に従う
 2. **RevenueCat**（**有料にするときだけ**。無料公開モードでは不要。無料枠で可）
    - App Store Connect で商品を3つ作成 → RevenueCat に登録（識別子は `src/services/billing.ts` の定数と合わせる）
      - `plate_trial_4weeks`：非消費型（買い切り）・価格 ¥0。4週間の無料体験の開始日を、この購入記録から判定する
@@ -118,3 +119,17 @@
 - 購入・体験の判定は端末側（RevenueCatのSDK）で行う（AIの1日の上限だけサーバーでも最大値で止める）。厳密にするには RevenueCat の webhook が要る
 - iPad は未対応（`supportsTablet: false`）
 - Android は未検証（iOS 前提）
+
+## Gemini の費用管理（issue #2）
+**サーバー側の上限（`supabase/functions/estimate-meal/index.ts`）**
+- 1人1日 30回（`DAILY_LIMIT`、日本時間の日付で数える。超えると 429 → アプリは「今日の推定の回数を使い切りました」）。無料の3回は端末側で数える
+- 全体 1日 3,000回（`GLOBAL_DAILY_LIMIT`、`supabase secrets set GLOBAL_DAILY_LIMIT=...` で変更）。超えると 503 → アプリは「写真の推定が混み合っています」。文章だけの推定は、端末の成分表照合に切り替わるので止まらない
+- 全体上限を入れた理由：個人の上限だけだと、アカウントを大量に作られたときに「ユーザー数 × 30回」まで費用が伸びる。1回あたりは小さい（gemini-flash-lite、入力は写真＋カタログ約2.6千字、出力は短いJSON）ので、3,000回/日でも月の最大は数千円の見込み（**単価は Google の料金表で要確認**）
+- 全体の確認が失敗したとき（マイグレーション未適用など）は止めずにログだけ残す（fail-open）。最後の砦は下の予算アラート
+
+**Google Cloud 側（人の作業。アカウントが必要）**
+1. Gemini の API キーを作ったプロジェクトを確認する（Google AI Studio → API keys に、キーが属する Cloud プロジェクトが出る）
+2. Cloud Console → お支払い → 予算とアラート → 予算を作成：対象はそのプロジェクト、金額は月の許容額（例：¥3,000）、しきい値 50% / 90% / 100%（実績）と 100%（予測）、通知先に自分のメールを追加。お支払いアカウントの管理者・ユーザーにメール通知が届く設定を確認する
+3. 予算は「通知だけ」で、自動では止まらない。止めたいときは、API キーを無効化するか、`supabase secrets set GLOBAL_DAILY_LIMIT=0`（0 で全体停止）にする。自動で止めたい場合は、予算アラートを Pub/Sub に流して Cloud Function で課金を無効化する方法があるが、誤作動のリスクがあるので v1.0 では入れない
+4. 任意：Cloud Console → API とサービス → Generative Language API → 割り当て（Quotas）で、1日のリクエスト数に上限を付ける（例：5,000/日）。これが課金側の本当の天井になる
+5. 確認：予算のしきい値を一時的に低く（例：¥1）して、通知メールが届くことを見てから、元の金額に戻す

@@ -61,7 +61,7 @@ npm run typecheck
 - ログイン画面（`design_handoff_plate 2` の案11c）：Apple／「ログインせずに始める」。起動画面（`assets/splash-login.png`）からそのまま続いて見える。ログインせずに始めても全機能をローカルで使え、あとから設定で「ログイン」できる。ログイン済みで別端末にバックアップがあれば、オンボーディングで復元できる。
 
 **設定が要る・未検証のもの**（コードはあるが、鍵・アカウント・実機がないので動作確認していない）
-- **Supabase**（ログイン・バックアップ）：`supabase/migrations/` の内容を適用し（単独の新規プロジェクトなら `supabase db push`、既存プロジェクトに相乗りするなら SQL Editor に貼って実行。理由は `docs/release-checklist.md` B章）、`.env.local` に URL とキーを入れる。ログイン方法ごとの設定：
+- **Supabase**（ログイン・バックアップ）：`supabase/migrations/` の内容を適用し（単独の新規プロジェクトなら `supabase db push`、既存プロジェクトに相乗りするなら SQL Editor に貼って実行。理由は `docs/release-checklist.md` B章。履歴が空の既存プロジェクトを `db push` 運用に移す手順は `docs/supabase-migrations.md`）、`.env.local` に URL とキーを入れる。ログイン方法ごとの設定：
   - **Apple**：Authentication → Providers で Apple を有効にする（iOS のネイティブの ID トークンで `signInWithIdToken`）。
 - **AI入力**：`supabase/functions/estimate-meal` をデプロイ（`GEMINI_API_KEY` を secrets に）。1日30回の上限はサーバー側で止める。無料の3回は端末側で数えている（無料／有料のサーバー判定には RevenueCat の webhook が要る。未対応）。原価の実測は未実施（設計書の未決事項）。
 - **RevenueCat**：Entitlement `plate_pro` と月額／年額の商品を作り、公開SDKキーを `.env.local` に。

@@ -3,6 +3,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Chip, ListRow, N, Notice, PrimaryButton, SectionLabel, Segmented, NumberStepper, T, color, hairline, radius } from '@/design-system';
 import { ACTIVITY_LEVELS, DEFAULT_PROFILE, GOAL_JP, checkWarnings, clampPace, defaultPace, initialTdee, paceOptions, weekKcalOf, type Goal, type Sex } from '../domain/nutrition';
+import { PaceChoices } from '../components/PaceChoices';
 import { TRIAL_DAYS } from '../domain/entitlement';
 import { FREE_LAUNCH } from '../lib/flags';
 import { startWithSampleData } from '../dev/sampleData';
@@ -100,12 +101,10 @@ export default function Onboarding() {
       <ListRow title="目標体重" right={<NumberStepper value={goalW} onChange={setGoalWeight} step={0.5} min={30} max={200} decimals={1} unit="kg" width={72} accessibilityLabel="目標体重" />} />
       {goal !== 'maintain' && (
         <>
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-            {p.options.map((o) => (
-              <Chip key={o} label={`${o > 0 ? '+' : '−'}${Math.abs(o).toFixed(2)} kg/週`} selected={Math.abs(o - p.pace) < 0.005} onPress={() => setPace(o)} />
-            ))}
+          <View style={{ marginTop: 10 }}>
+            <PaceChoices goal={goal} weightKg={weight} options={p.options} pace={p.pace} onPick={setPace} label={(o) => `${o > 0 ? '+' : '−'}${Math.abs(o).toFixed(2)} kg/週`} />
           </View>
-          <T size={12} c={color.sub} style={{ marginTop: 6 }}>{goal === 'cut' ? '減量は体重の0.5〜1%/週の範囲で選べます。' : '増量は体重の0.25〜0.5%/週の範囲で選べます。'}</T>
+          <T size={12} c={color.sub} style={{ marginTop: 4 }}>{goal === 'cut' ? '減量は体重の0.5〜1%/週の範囲で選べます。' : '増量は体重の0.25〜0.5%/週の範囲で選べます。'}数字は目安で、医療的な助言ではありません。</T>
         </>
       )}
 

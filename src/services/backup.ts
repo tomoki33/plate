@@ -1,7 +1,5 @@
-import { eq } from 'drizzle-orm';
 import { db, sqlite } from '../db/client';
-import { backupFoods } from '../domain/backupFoods';
-import * as s from '../db/schema';
+import { applyPayloadTo, BACKUP_VERSION, buildPayloadFrom, type BackupPayload } from '../db/restore';
 import { downloadPhotos, uploadPhotos } from './photoSync';
 import { supabase } from './supabase';
 
@@ -14,41 +12,10 @@ import { supabase } from './supabase';
  * Supabase 側のテーブル（supabase/migrations/20260928190100_backups.sql）:
  *   backups(user_id uuid pk, payload jsonb, updated_at timestamptz)  + RLS: 本人の行だけ読み書きできる
  */
-export const BACKUP_VERSION = 1;
+export { BACKUP_VERSION, type BackupPayload };
 
-
-export interface BackupPayload {
-  version: number;
-  createdAt: number;
-  /**
-   * 'merge'：端末の記録は消さず、入っていない行だけ足す（他のシステムからの移行用。含まれるテーブルだけを足す）。
-   * 省略または 'replace'：端末の記録をバックアップの内容に置き換える。
-   */
-  mode?: 'replace' | 'merge';
-  tables: Record<string, unknown[]>;
-}
-
-export async function buildPayload(): Promise<BackupPayload> {
-  const foods = backupFoods(await db.select().from(s.food));
-  return {
-    version: BACKUP_VERSION,
-    createdAt: Date.now(),
-    tables: {
-      profile: await db.select().from(s.profile),
-      body_log: await db.select().from(s.bodyLog),
-      exercise: await db.select().from(s.exercise),
-      workout_template: await db.select().from(s.workoutTemplate),
-      week_plan: await db.select().from(s.weekPlan),
-      workout_session: await db.select().from(s.workoutSession),
-      workout_set: await db.select().from(s.workoutSet),
-      food: foods,
-      meal_set: await db.select().from(s.mealSet),
-      meal_entry: await db.select().from(s.mealEntry),
-      day_target: await db.select().from(s.dayTarget),
-      pace_suggestion: await db.select().from(s.paceSuggestion),
-      kv: await db.select().from(s.kv),
-    },
-  };
+export function buildPayload(): Promise<BackupPayload> {
+  return buildPayloadFrom(db);
 }
 
 export async function backupNow(): Promise<{ ok: boolean; error?: string; at?: number }> {
@@ -91,56 +58,6 @@ export async function restoreLatest(): Promise<{ ok: boolean; error?: string }> 
   return r;
 }
 
-export async function applyPayload(p: BackupPayload): Promise<{ ok: boolean; error?: string }> {
-  if (!p || p.version !== BACKUP_VERSION || typeof p.tables !== 'object') return { ok: false, error: '対応していないバックアップです' };
-  const t = p.tables as Record<string, never[]>;
-  try {
-    if (p.mode === 'merge') {
-      await sqlite.withTransactionAsync(async () => {
-        const add = async (table: never, rows: never[] | undefined) => {
-          for (let i = 0; i < (rows ?? []).length; i += 50) await db.insert(table).values((rows ?? []).slice(i, i + 50) as never).onConflictDoNothing();
-        };
-        await add(s.bodyLog as never, t.body_log);
-        await add(s.mealEntry as never, t.meal_entry);
-      });
-      return { ok: true };
-    }
-    await sqlite.withTransactionAsync(async () => {
-      const tx = db;
-      await tx.delete(s.mealEntry);
-      await tx.delete(s.bodyLog);
-      await tx.delete(s.workoutSet);
-      await tx.delete(s.workoutSession);
-      await tx.delete(s.dayTarget);
-      await tx.delete(s.paceSuggestion);
-      await tx.delete(s.mealSet);
-      await tx.delete(s.kv);
-      await tx.delete(s.weekPlan);
-      await tx.delete(s.workoutTemplate);
-      await tx.delete(s.exercise);
-      await tx.delete(s.profile);
-      await tx.delete(s.food).where(eq(s.food.source, '自作'));
-      await tx.delete(s.food).where(eq(s.food.source, 'AI'));
-      const ins = async (table: never, rows: never[]) => {
-        for (let i = 0; i < rows.length; i += 50) await tx.insert(table).values(rows.slice(i, i + 50) as never);
-      };
-      await ins(s.profile as never, t.profile ?? []);
-      await ins(s.exercise as never, t.exercise ?? []);
-      await ins(s.workoutTemplate as never, t.workout_template ?? []);
-      await ins(s.weekPlan as never, t.week_plan ?? []);
-      // 成分表・カタログはアプリに入っているので戻さない（古いバックアップに入っていても読み飛ばす）
-      await ins(s.food as never, backupFoods((t.food ?? []) as { source: string }[]) as never[]);
-      await ins(s.mealSet as never, t.meal_set ?? []);
-      await ins(s.bodyLog as never, t.body_log ?? []);
-      await ins(s.mealEntry as never, t.meal_entry ?? []);
-      await ins(s.workoutSession as never, t.workout_session ?? []);
-      await ins(s.workoutSet as never, t.workout_set ?? []);
-      await ins(s.dayTarget as never, t.day_target ?? []);
-      await ins(s.paceSuggestion as never, t.pace_suggestion ?? []);
-      await ins(s.kv as never, t.kv ?? []);
-    });
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
-  }
+export function applyPayload(p: BackupPayload): Promise<{ ok: boolean; error?: string }> {
+  return applyPayloadTo(db, (fn) => sqlite.withTransactionAsync(fn), p);
 }

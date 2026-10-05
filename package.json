@@ -55,6 +55,7 @@
     "playwright": "^1.63.0",
     "sharp": "^0.35.4",
     "sql.js": "^1.14.2",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.3",
     "vitest": "^4.1.11"
   },
@@ -66,7 +67,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
-    "screenshots": "node scripts/capture-screenshots.mjs"
+    "screenshots": "node scripts/capture-screenshots.mjs",
+    "eval:foods": "tsx scripts/eval-foods.ts"
   },
   "private": true
 }

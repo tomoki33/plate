@@ -136,3 +136,16 @@ npm install && npm run dev               # http://localhost:3100
 - **ログインは、アプリと同じアカウント（Apple）で入る必要がある**（別のアカウントでは、アプリのコーチ／生徒のデータが見えない）。Web で Apple を使うには、Apple Developer で Services ID を作り、Supabase の Authentication → Providers → Apple の Client IDs にその Services ID を追加し、Secret Key（JWT）を設定する。Redirect URL は Supabase 側の値を Services ID に登録。
 - 設定できるまでの確認用に、`NEXT_PUBLIC_ENABLE_PASSWORD_LOGIN=1` でメール＋パスワードのログインを出せる（別アカウントになるので、本番では使わない）。
 - Vercel には、Root Directory を `coach` にして出す。
+
+## 食品名の評価（命中率）
+
+食品検索・言い換え辞書を直したとき、数字で前後を比べられる。端末と同じ検索手順を、DB なしで実行する。
+
+```bash
+npm run eval:foods                                   # 命中率と、外れた名前の一覧
+npm run eval:foods -- --save /tmp/before.json        # 変更前の結果を保存
+npm run eval:foods -- --compare /tmp/before.json     # 変更後に実行：直った／悪化した名前を出す
+npm run eval:foods -- --min 0.95                     # 下限を下回ったら終了コード 1
+```
+
+評価リストは `eval/foods.json`（一般的な食品名のみ。個人の記録は入れない）。`accept` は先頭に出た食品名への正規表現で、空なら「見つからない」が正解。

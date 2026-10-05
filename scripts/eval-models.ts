@@ -22,7 +22,14 @@ const opt = (n: string) => (args.indexOf(n) >= 0 ? args[args.indexOf(n) + 1] : u
 const models = (opt('--models') ?? 'gemini-flash-lite-latest,gemini-3.8-flash,gemini-3.5-flash').split(',');
 const runs = Number(opt('--runs') ?? 2);
 const maxCalls = Number(opt('--max-calls') ?? 300);
-const delayMs = Number(opt('--delay-ms') ?? 0); // 無料枠など、1 分あたりの回数に制限があるときに間隔を空ける
+const delayMs = Number(opt('--delay-ms') ?? 0);
+for (const [name, v, min] of [['--runs', runs, 1], ['--max-calls', maxCalls, 1], ['--delay-ms', delayMs, 0]] as const) {
+  if (!Number.isInteger(v) || v < min) {
+    console.error(`${name} は ${min} 以上の整数にしてください`);
+    process.exit(2);
+  }
+}
+ // 無料枠など、1 分あたりの回数に制限があるときに間隔を空ける
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey && !args.includes('--dry-run')) {
   console.error('GEMINI_API_KEY を環境変数に入れてください');
@@ -58,10 +65,11 @@ const SCHEMA = {
 let calls = 0;
 const status: Record<string, number> = {};
 async function ask(model: string, text: string) {
-  const t0 = Date.now();
+  let firstFailed = false;
   for (let attempt = 0; ; attempt++) {
     if (++calls > maxCalls) throw new Error('call cap reached');
     if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
+    const t0 = Date.now(); // 間隔を空ける待ちは含めない。成功した 1 回の通信だけを測る
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey! },
@@ -72,6 +80,7 @@ async function ask(model: string, text: string) {
       }),
     }).catch(() => null);
     const st = res ? res.status : 0;
+    if (!res || !res.ok) firstFailed ||= attempt === 0;
     if ((st === 429 || st === 503 || st === 0) && attempt < 2) {
       await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
       continue;
@@ -79,7 +88,7 @@ async function ask(model: string, text: string) {
     const ms = Date.now() - t0;
     if (!res || !res.ok) {
       status[`${model}:${st}`] = (status[`${model}:${st}`] ?? 0) + 1;
-      return { items: null as { key: string | null }[] | null, ms, inTok: 0, outTok: 0, version: '' };
+      return { items: null as { key: string | null }[] | null, ms, inTok: 0, outTok: 0, version: '', firstFailed };
     }
     const body = await res.json();
     const raw = body.candidates?.[0]?.content?.parts?.find((p: { text?: string }) => typeof p.text === 'string')?.text ?? '{"items":[]}';
@@ -90,7 +99,7 @@ async function ask(model: string, text: string) {
       // 壊れた JSON は空＝不正解として数える
     }
     const u = body.usageMetadata ?? {};
-    return { items, ms, inTok: u.promptTokenCount ?? 0, outTok: (u.candidatesTokenCount ?? 0) + (u.thoughtsTokenCount ?? 0), version: String(body.modelVersion ?? '') };
+    return { items, ms, inTok: u.promptTokenCount ?? 0, outTok: (u.candidatesTokenCount ?? 0) + (u.thoughtsTokenCount ?? 0), version: String(body.modelVersion ?? ''), firstFailed };
   }
 }
 
@@ -103,13 +112,14 @@ const pass = (c: Case, items: { key: string | null }[]) => {
 async function main() {
   const rows: string[] = [];
   for (const model of models) {
-    let ok = 0, n = 0, errors = 0, ms = 0, inTok = 0, outTok = 0, version = '';
+    let ok = 0, n = 0, errors = 0, firstFails = 0, ms = 0, inTok = 0, outTok = 0, version = '';
     const group: Record<string, [number, number]> = {};
     for (const c of cases) {
       for (let r = 0; r < runs; r++) {
         if (n >= 6 && errors === n) break; // 最初の 6 回がすべて失敗したモデルは、残りを送らずに打ち切る（費用と時間の節約）
         const a = await ask(model, c.text);
         n++;
+        if (a.firstFailed) firstFails++;
         if (a.items) ms += a.ms;
       inTok += a.inTok; outTok += a.outTok; version = a.version || version;
         const g = (group[c.group] ??= [0, 0]);
@@ -122,11 +132,11 @@ async function main() {
     const okN = n - errors;
     const cost = okN ? (inTok * pi + outTok * po) / 1e6 / okN : 0;
     const gs = Object.entries(group).map(([k, [h, t]]) => `${k} ${h}/${t}`).join('、');
-    const row = `| ${model}${version && version !== model ? `（${version}）` : ''} | ${((ok / n) * 100).toFixed(1)}% (${ok}/${n}) | ${gs} | ${errors} | ${(ms / Math.max(okN, 1) / 1000).toFixed(1)} 秒 | ${Math.round(inTok / Math.max(okN, 1))} / ${Math.round(outTok / Math.max(okN, 1))} | $${cost.toFixed(5)} | $${(cost * 1000).toFixed(2)} |`;
+    const row = `| ${model}${version && version !== model ? `（${version}）` : ''} | ${((ok / n) * 100).toFixed(1)}% (${ok}/${n}) | ${gs} | ${errors} | ${((firstFails / n) * 100).toFixed(1)}% | ${(ms / Math.max(okN, 1) / 1000).toFixed(1)} 秒 | ${Math.round(inTok / Math.max(okN, 1))} / ${Math.round(outTok / Math.max(okN, 1))} | $${cost.toFixed(5)} | $${(cost * 1000).toFixed(2)} |`;
     rows.push(row);
     console.error(`完了: ${row}`); // 途中で止まっても、終わったモデルの結果は残る
   }
-  console.log('\n| モデル | 正答率 | グループ別 | エラー | 平均の遅さ | 入力 / 出力トークン（1 回） | 1 回の費用 | 1000 回の費用 |\n|---|---|---|---|---|---|---|---|');
+  console.log('\n| モデル | 正答率 | グループ別 | 最終エラー | 初回失敗率（429・503・通信） | 平均の遅さ | 入力 / 出力トークン（1 回） | 1 回の費用 | 1000 回の費用 |\n|---|---|---|---|---|---|---|---|---|');
   console.log(rows.join('\n'));
   console.log(`\n実際の呼び出し: ${calls} 回（再試行を含む）`);
   if (Object.keys(status).length) console.log(`エラーの内訳（HTTP ステータス）: ${JSON.stringify(status)}`);

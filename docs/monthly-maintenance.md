@@ -34,7 +34,7 @@
   - 予算アラートの通知先・しきい値（50% / 90% / 100% 実績、100% 予測）が残っているか
   - 緊急停止の手段を覚えている：`supabase secrets set GLOBAL_DAILY_LIMIT=0`（全体停止）、または API キーの無効化
 - [ ] **Supabase**：Dashboard → Usage で、無料枠（DB サイズ・ストレージ・Edge Function 呼び出し・帯域）に対する使用率。**80% を超えていたら** Pro への切り替えを検討する（`docs/supabase-keepalive.md` の方針）。写真バケット（`plate-meal-photos`）の容量も見る
-- [ ] **EAS**：expo.dev → Billing / Usage で、ビルド数と更新（`eas update`）の月間の上限に対する使用率。無料枠のビルド数を使い切りそうなら、ビルドを減らすか有料にするかを決める
+- [ ] **EAS**：expo.dev → Billing / Usage で、ビルド数と更新（`npx eas-cli@latest update`）の月間の上限に対する使用率。無料枠のビルド数を使い切りそうなら、ビルドを減らすか有料にするかを決める
 - [ ] **Sentry**：Usage で、イベント数が無料枠に収まっているか（収まらないときは、サンプリングを下げるか、うるさいエラーを直す）
 - [ ] **Apple Developer Program**：更新日（年 1 回 $99）が近くないか。支払い方法の期限切れがないか
 - [ ] （課金を始めたら）RevenueCat の手数料・Apple の手数料を、収益と並べて確認
@@ -63,7 +63,7 @@ SDK のメジャー更新（四半期ごとに、新しい SDK が出ていな�
 - [ ] 次の iOS のベータ・リリース時期を確認する（例年 6 月に発表、9 月ごろに正式公開）。**正式公開の前に**、ベータで主要機能が動くか確認する（実機にベータを入れるか、Xcode のシミュレータで）
 - [ ] Apple の「Upcoming Requirements」（<https://developer.apple.com/news/upcoming-requirements/>）：最低限必要な Xcode / SDK のバージョン。**期限までに、その SDK でビルドしたアプリを出さないと、提出できなくなる**。EAS のビルドイメージが新しい SDK に対応しているかも確認する
 - [ ] 新しい iOS で、次を確認（`docs/release-checklist.md` の E「実機テスト項目」の主要部分）：起動、記録、写真を撮る・選ぶ（権限ダイアログ）、AI 入力、バックアップ同期、通知（使っていれば）、ダークモード・文字サイズ
-- [ ] 問題があれば issue にし、修正を OTA（`eas update`）で出せるか、ネイティブの変更が要るかを判断する
+- [ ] 問題があれば issue にし、修正を OTA（`npx eas-cli@latest update`）で出せるか、ネイティブの変更が要るかを判断する
 
 ## 4. AI モデルの変更・廃止（10 分）
 
@@ -76,8 +76,8 @@ SDK のメジャー更新（四半期ごとに、新しい SDK が出ていな�
 - [ ] Google からのメール（Cloud / AI Studio の通知）で、モデルの廃止通知が来ていないか
 - [ ] **エイリアスの先が変わった、またはモデルを替える・上げるときだけ**、AI の品質を測り直す（外部 API を叩くので費用がかかる。**毎月は回さない**）：
   1. `npm run eval:foods`（端末側の食品名検索だけ。API は使わない。`-- --min 0.95` で下限割れを検出）
-  2. `GEMINI_API_KEY=... npm run eval:prompt -- --save <前>.json`（変更前の結果。`--runs` で回数を減らすと安い）
-  3. モデルを替えたあと `npm run eval:prompt -- --compare <前>.json` で、直った・悪化したケースを見る
+  2. **こちらから切り替える場合（計画した変更）**：切り替える前に、今のモデルで `GEMINI_API_KEY=... npm run eval:prompt -- --save <前>.json`（`--runs` で回数を減らすと安い）。切り替えたあと `npm run eval:prompt -- --compare <前>.json` で、直った・悪化したケースを見る
+  3. **エイリアスの先がすでに変わっていた場合**：`eval-prompt.ts` は実行時にエイリアスを解決するので、今 `--save` しても「変更前」にならない（新モデル同士の比較になり、悪化を見逃す）。まず新モデルで `--save` して絶対値（正解率）を見る。悪化していれば、`ESTIMATE_MODEL` を固定した旧モデル名（廃止されていないもの）に戻して、同じく `--save` し、`--compare` で比べる。旧モデル名が分からない・使えないときは、前回の `--save` の結果（あれば）と比べる
   4. 悪化が目立てば、`ESTIMATE_MODEL` を固定したモデルに戻す（`supabase secrets set ESTIMATE_MODEL=<モデル名>`。再デプロイは不要）
 - [ ] 固定したモデル名にしている場合は、廃止予定日をこの欄に書いておく（なければ「なし」）：_____
 
@@ -85,7 +85,9 @@ SDK のメジャー更新（四半期ごとに、新しい SDK が出ていな�
 
 - [ ] Supabase Dashboard → Settings → Infrastructure で、Postgres のバージョン更新の案内が出ていないか。出ていれば、メンテナンスの時間帯と影響（数分の停止）を確認する
 - [ ] Edge Function の実行ログ（Logs）で、エラー率が高くないか。`estimate-meal` の 4xx / 5xx（429 は個人上限、503 は全体上限か上限確認の失敗）
-- [ ] マイグレーションを足した月は、`supabase migration list --linked` の Local / Remote が全行一致しているか（`docs/supabase-migrations.md`。他アプリと同居しているなら、`db push` ではなく SQL Editor 運用のまま）
+- [ ] マイグレーションを足した月は、運用方式に合わせて確認する（`docs/supabase-migrations.md`）：
+  - **PLATE 専用プロジェクトで `db push` 運用**：`supabase migration list --linked` の Local / Remote が全行一致している
+  - **他アプリと同居（SQL Editor 運用）**：Remote の履歴はプロジェクト共有で PLATE の Local と一致しないのが正常なので、この確認はしない。代わりに、足した SQL が SQL Editor で適用済みか（`scripts/supabase-verify-baseline.sql` のような存在確認）を見る
 - [ ] 新しい migration を適用してから Edge Function を再デプロイした順序になっているか（逆だと `global quota check failed` で 503 になる）
 - [ ] 秘密情報（API キー・`SENTRY_AUTH_TOKEN` など）の有効期限・ローテーションの予定がないか。漏れた疑いがあれば、すぐ再発行して `supabase secrets set` / EAS のシークレットを更新する
 

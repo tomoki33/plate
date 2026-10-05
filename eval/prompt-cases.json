@@ -1,0 +1,190 @@
+{
+  "_comment": "AI の指示文の評価用。keys=返るべき品の key（順不同・過不足なし。null=カタログを選ばないのが正解）。一般的な料理名だけを置く（個人の記録は含めない）。",
+  "cases": [
+    {
+      "group": "過剰一致",
+      "text": "タンドリーチキン",
+      "note": "鶏もも肉などに当てない",
+      "keys": [
+        null
+      ]
+    },
+    {
+      "group": "過剰一致",
+      "text": "チキン南蛮",
+      "keys": [
+        null
+      ]
+    },
+    {
+      "group": "過剰一致",
+      "text": "チキンカツ",
+      "keys": [
+        null
+      ]
+    },
+    {
+      "group": "過剰一致",
+      "text": "鮭のムニエル",
+      "keys": [
+        null
+      ]
+    },
+    {
+      "group": "過剰一致",
+      "text": "鶏肉のトマト煮",
+      "keys": [
+        null
+      ]
+    },
+    {
+      "group": "過剰一致",
+      "text": "ささみチーズフライ",
+      "keys": [
+        null
+      ]
+    },
+    {
+      "group": "過剰一致",
+      "text": "豚キムチ",
+      "keys": [
+        null
+      ]
+    },
+    {
+      "group": "過剰一致",
+      "text": "サバの味噌煮",
+      "keys": [
+        null
+      ]
+    },
+    {
+      "group": "過剰一致",
+      "text": "鶏の甘酢あん",
+      "keys": [
+        null
+      ]
+    },
+    {
+      "group": "過剰一致",
+      "text": "ツナマヨおにぎり",
+      "keys": [
+        null
+      ]
+    },
+    {
+      "group": "命中",
+      "text": "鶏むね肉（皮なし）を150g",
+      "keys": [
+        "chicken_breast_skinless"
+      ]
+    },
+    {
+      "group": "命中",
+      "text": "鶏もも肉 皮つき 200g",
+      "keys": [
+        "chicken_thigh_skin"
+      ]
+    },
+    {
+      "group": "命中",
+      "text": "ささみ 2本",
+      "keys": [
+        "chicken_sasami"
+      ]
+    },
+    {
+      "group": "命中",
+      "text": "牛丼",
+      "keys": [
+        "gyudon"
+      ]
+    },
+    {
+      "group": "命中",
+      "text": "親子丼",
+      "keys": [
+        "oyakodon"
+      ]
+    },
+    {
+      "group": "命中",
+      "text": "カレーライス",
+      "keys": [
+        "curry_rice"
+      ]
+    },
+    {
+      "group": "命中",
+      "text": "唐揚げ 5個",
+      "keys": [
+        "karaage"
+      ]
+    },
+    {
+      "group": "命中",
+      "text": "豚の生姜焼き",
+      "keys": [
+        "shogayaki"
+      ]
+    },
+    {
+      "group": "命中",
+      "text": "ごはん 茶碗1杯",
+      "keys": [
+        "rice"
+      ]
+    },
+    {
+      "group": "命中",
+      "text": "納豆 1パック",
+      "keys": [
+        "natto"
+      ]
+    },
+    {
+      "group": "命中",
+      "text": "焼き鮭 1切れ",
+      "keys": [
+        "salmon_grilled"
+      ]
+    },
+    {
+      "group": "命中",
+      "text": "ハンバーグ",
+      "keys": [
+        "hamburg"
+      ]
+    },
+    {
+      "group": "料理は1品",
+      "text": "ささみチーズフライ",
+      "keys": [
+        null
+      ]
+    },
+    {
+      "group": "料理は1品",
+      "text": "チキン南蛮",
+      "keys": [
+        null
+      ]
+    },
+    {
+      "group": "料理は1品",
+      "text": "カレーライス",
+      "keys": [
+        "curry_rice"
+      ]
+    },
+    {
+      "group": "料理は1品",
+      "text": "ごはんと味噌汁と焼き鮭",
+      "keys": [
+        "rice",
+        "miso_soup",
+        "salmon_grilled"
+      ]
+    }
+  ]
+}

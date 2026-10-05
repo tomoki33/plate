@@ -69,7 +69,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
     "screenshots": "node scripts/capture-screenshots.mjs",
-    "eval:foods": "tsx scripts/eval-foods.ts"
+    "eval:foods": "tsx scripts/eval-foods.ts",
+    "eval:prompt": "tsx scripts/eval-prompt.ts"
   },
   "private": true
 }

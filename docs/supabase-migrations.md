@@ -24,8 +24,11 @@
 1. **リンク**（初回のみ）：`supabase login` → `supabase link --project-ref <ref>`（DB パスワードを聞かれる）。
 2. **履歴の確認（変更なし）**：`scripts/supabase-baseline.sh`
    - `supabase migration list --linked` の結果で、Remote 列が空であること（＝ローカル 5 本が全部 Local のみ）を確認する。Remote だけにある版があれば、上の「相乗り」の扱いにして中止。
-3. **中身が本当に入っているか確認（読み取りのみ）**：`scripts/supabase-verify-baseline.sql` を SQL Editor で実行し、**全行 `present = true`** を確認する。false の行は、その migration を SQL Editor で先に適用してから（または `supabase db push` の対象として残して）進める。**false のものを applied にしない**（スキーマが無いのに「適用済み」になる）。
-4. **baseline 登録**：`scripts/supabase-baseline.sh --apply`（`yes` と答える）。内部で次を実行する。
+3. **中身が本当に入っているか確認（読み取りのみ）**：
+   1. `scripts/supabase-verify-baseline.sql` を SQL Editor で実行し、**全行 `present = true`** を確認する（テーブル・RLS・ポリシー名・インデックス・関数・実行権限・写真バケットの非公開）。
+   2. 末尾の「手動確認」のクエリで、ポリシーの条件式と関数の本文を出し、`supabase/migrations/*.sql` と見比べる（上の SQL は名前と有無しか見られない）。
+   3. **1 行でも false、または差分があれば、ここで中止する。** 不足している箇所だけを SQL Editor で補い（既存のものを丸ごと再実行しない。`create policy` は再実行で失敗し、途中状態になりうる）、手順 3 を最初からやり直す。false のまま applied にすると、以後の `db push` はその分を二度と適用しない。
+4. **baseline 登録**（対象は上記 5 版に固定。以降に足した migration は含めず、通常の `db push` で流す）：`scripts/supabase-baseline.sh --apply`（`yes` と答える）。内部で次を実行する。
    ```bash
    supabase migration repair --linked --status applied 20260928190100 20260928190200 20260929120000 20260929130000 20261002000000
    ```

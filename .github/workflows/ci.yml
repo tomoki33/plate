@@ -30,6 +30,20 @@ jobs:
       - name: Test
         run: npm test
 
+  bundle:
+    name: Production bundle (forbidden strings)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Check production bundle
+        run: npm run check:bundle
+
   coach:
     name: coach (typecheck)
     runs-on: ubuntu-latest

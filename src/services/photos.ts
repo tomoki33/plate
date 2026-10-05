@@ -44,20 +44,27 @@ export async function pickPhoto(source: 'camera' | 'library'): Promise<PickResul
 async function toResult(r: ImagePicker.ImagePickerResult): Promise<PickResult> {
   if (r.canceled || !r.assets?.length) return { photo: null };
   const a = r.assets[0];
-  return { photo: await shrink(a.uri, a.width, a.height) };
+  const photo = await shrink(a.uri, a.width, a.height);
+  if (!photo) return { photo: null, error: '写真を縮小できませんでした。もう一度撮り直すか、文章で書いてください。' };
+  return { photo };
 }
 
-/** 長辺を縮めて JPEG にし、AIに送る base64 を作る（大きい写真で 413 になるのを防ぎ、通信も速くする）。失敗したら元の写真のまま返す */
-async function shrink(uri: string, width: number, height: number): Promise<PickedPhoto> {
+/** 長辺を縮めて JPEG にし、AIに送る base64 を作る（大きい写真で 413 になるのを防ぎ、通信も速くする）。失敗したら null */
+async function shrink(uri: string, width: number, height: number): Promise<PickedPhoto | null> {
+  const ctx = ImageManipulator.manipulate(uri);
+  let img: Awaited<ReturnType<typeof ctx.renderAsync>> | null = null;
   try {
-    const ctx = ImageManipulator.manipulate(uri);
     const target = resizeTarget(width, height);
     if (target) ctx.resize(target);
-    const img = await ctx.renderAsync();
+    img = await ctx.renderAsync();
     const out = await img.saveAsync({ format: SaveFormat.JPEG, compress: 0.7, base64: true });
-    return { uri: out.uri, base64: out.base64 ?? undefined };
+    return out.base64 ? { uri: out.uri, base64: out.base64 } : null;
   } catch {
-    return { uri };
+    return null;
+  } finally {
+    // ネイティブの画像を持ち続けないよう、明示的に解放する（manipulateAsync と同じ）
+    img?.release();
+    ctx.release();
   }
 }
 

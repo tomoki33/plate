@@ -7,6 +7,7 @@
     "@expo-google-fonts/noto-sans-jp": "^0.4.3",
     "@expo/metro-runtime": "~57.0.16",
     "@kingstinct/react-native-healthkit": "^16.0.0",
+    "@sentry/react-native": "~7.11.0",
     "@supabase/supabase-js": "^2.109.0",
     "babel-plugin-inline-import": "^3.0.0",
     "drizzle-orm": "^0.45.3",

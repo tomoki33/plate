@@ -67,6 +67,7 @@
   - 収集するデータ：ヘルスケアとフィットネス（体重）、連絡先情報（メール）、ユーザーコンテンツ（写真・食事の記録）、識別子（ユーザーID）、購入履歴
   - **v1.1（コーチ機能を有効にするとき）に追加**：ヘルスケアとフィットネス（食事・体重・トレーニング）は、利用者が承認した場合に**他の利用者（コーチ）に共有される**。「ユーザーに紐づく」で申告し、利用目的は「アプリの機能」。トラッキングには使わない
   - App Review で聞かれやすい点：健康データを他の利用者に見せる同意（承認画面で項目ごとに選択・いつでも解除）、コーチ側が受け取る情報の範囲（写真・メモ・プロフィールは非共有）、アカウント削除で共有データも消えること
+  - **クラッシュ監視（Sentry、issue #4）を入れたビルドから追加**：診断 →「クラッシュデータ」。利用目的は「アプリの機能」、「ユーザーに紐づかない」、トラッキングには使わない。送るのはエラーの種類・スタック・アプリのバージョン・OS／機種のみ（記録・ユーザーIDは送らない。`src/services/crashScrub.ts` とそのテストで担保）。Sentry のプロジェクト設定で「Prevent Storing of IP Addresses」を必ずオンにする
   - 利用目的：アプリの機能。**トラッキングには使わない**（ATT 不要）
   - ユーザーに紐づく／紐づかない は、バックアップ・ログイン分は「紐づく」
 - **審査メモ**（下記をそのまま貼る。コーチ機能を入れたので、末尾の1段落を足す）
@@ -110,6 +111,14 @@
 - [ ] **[開発ビルド]** アカウント削除（19b の画面）→ ログイン画面へ戻る、Storage の写真も消えること
 - [ ] **[開発ビルド]** バックアップ → アプリ削除 → 入れ直して復元（**写真も戻ること**。Supabase の Storage に `plate-meal-photos/<user_id>/` ができる）
 - [ ] **[開発ビルド]** 機内モード：AI 以外は普通に動く／AI は分かりやすいエラー
+
+## E2. クラッシュ監視（Sentry、issue #4）
+- [ ] Sentry でプロジェクト（React Native）を作り、DSN・組織スラッグ・プロジェクト名を控える。設定 → Security & Privacy で **Prevent Storing of IP Addresses** をオン（データの保管地域も、作成時に選ぶ）
+- [ ] EAS に環境変数 `EXPO_PUBLIC_SENTRY_DSN`（production）、シークレット `SENTRY_AUTH_TOKEN`（Organization Auth Token。ソースマップのアップロード用）、`SENTRY_ORG`・`SENTRY_PROJECT` を登録（`app.json` の `@sentry/react-native` プラグインに `organization`・`project` を書いてもよい）
+- [ ] Sentry のアラートルール「新しい問題が出たらメール通知」を作る（完了条件「クラッシュが通知で届く」）
+- [ ] **新しい EAS ビルドが必要**（ネイティブモジュールが増えるため。OTA 更新では入らない）：`npx eas-cli@latest build --profile production --platform ios` → 審査提出
+- [ ] 本番ビルドで一度だけテスト送信し、Sentry の画面で内容に記録・メール・ユーザーIDが入っていないことを確認する。**ネイティブのクラッシュ（例：テスト用に `Sentry.nativeCrash()` を一時的に呼ぶ）も1回送り、その内容も確認する**（ネイティブのクラッシュは `beforeSend` を通らず、ネイティブ SDK が直接送るため）
+- [ ] `docs/privacy-policy.md` と `web/legal.html` の更新（本 PR で反映済み）を、公開ページに反映する
 
 ## F. 計測（公開直後から入れる。README_launch 5章）
 - [ ] 分析サービスを選ぶ（PostHog・Amplitude など）。`src/services/analytics.ts` の `send()` を差し替えるか、そのサービスの受け口を `EXPO_PUBLIC_ANALYTICS_ENDPOINT` に立てる

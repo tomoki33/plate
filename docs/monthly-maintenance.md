@@ -33,7 +33,7 @@
   - 1 人 1 日 `DAILY_LIMIT`（30 回、`supabase/functions/estimate-meal/index.ts`）／全体 1 日 `GLOBAL_DAILY_LIMIT`（既定 3,000 回、`supabase secrets set GLOBAL_DAILY_LIMIT=...` で変更）が今の利用規模に合っているか
   - 予算アラートの通知先・しきい値（50% / 90% / 100% 実績、100% 予測）が残っているか
   - 緊急停止の手段を覚えている：`supabase secrets set GLOBAL_DAILY_LIMIT=0`（全体停止）、または API キーの無効化
-- [ ] **Supabase**：Dashboard → Usage で、無料枠（DB サイズ・ストレージ・Edge Function 呼び出し・帯域）に対する使用率。**80% を超えていたら** Pro への切り替えを検討する（`docs/supabase-keepalive.md` の方針）。写真バケット（`meal_photos`）の容量も見る
+- [ ] **Supabase**：Dashboard → Usage で、無料枠（DB サイズ・ストレージ・Edge Function 呼び出し・帯域）に対する使用率。**80% を超えていたら** Pro への切り替えを検討する（`docs/supabase-keepalive.md` の方針）。写真バケット（`plate-meal-photos`）の容量も見る
 - [ ] **EAS**：expo.dev → Billing / Usage で、ビルド数と更新（`eas update`）の月間の上限に対する使用率。無料枠のビルド数を使い切りそうなら、ビルドを減らすか有料にするかを決める
 - [ ] **Sentry**：Usage で、イベント数が無料枠に収まっているか（収まらないときは、サンプリングを下げるか、うるさいエラーを直す）
 - [ ] **Apple Developer Program**：更新日（年 1 回 $99）が近くないか。支払い方法の期限切れがないか

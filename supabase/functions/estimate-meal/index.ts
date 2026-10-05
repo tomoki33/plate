@@ -94,10 +94,13 @@ Deno.serve(async (req) => {
   const { data: ok, error: qerr } = await admin.rpc('consume_ai_quota', { p_user: u.user.id, p_limit: DAILY_LIMIT });
   if (qerr) return json({ error: 'quota check failed' }, 500);
   if (!ok) return json({ error: 'daily limit reached' }, 429);
-  // 全体の上限。確認に失敗したときは止めず（マイグレーション未適用でも動かす）、ログだけ残す。予算アラートが最後の砦
+  // 全体の上限。確認に失敗したときも通さず 503（fail-closed）。上限を確認できないまま Gemini を呼ばない
   const { data: gok, error: gerr } = await admin.rpc('consume_ai_global_quota', { p_limit: GLOBAL_DAILY_LIMIT });
-  if (gerr) console.error('global quota check failed', gerr.message);
-  else if (!gok) return json({ error: 'service busy' }, 503);
+  if (gerr) {
+    console.error('global quota check failed', gerr.message);
+    return json({ error: 'service busy' }, 503);
+  }
+  if (!gok) return json({ error: 'service busy' }, 503);
 
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
     method: 'POST',

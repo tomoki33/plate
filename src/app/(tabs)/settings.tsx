@@ -259,9 +259,9 @@ export default function SettingsScreen() {
             <Card>
               <CardRow
                 title="使われ方を送る（任意）"
-                meta="起動・記録した日・トレーニング完了の回数だけ。食事や体重の中身、名前・メールは送りません"
+                meta="起動したこと、食事を記録した日と入力方法（検索・写真など）、体験の開始と購入、トレーニング完了までの日数だけ。食事・体重の中身、名前・メールは送りません"
                 right={<Switch value={st.analyticsId !== null} onValueChange={st.setAnalyticsConsent} trackColor={{ true: color.text, false: color.lineStrong }} thumbColor={color.surface} />}
-                minHeight={72}
+                minHeight={96}
                 last
               />
             </Card>

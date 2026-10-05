@@ -12,7 +12,7 @@ import { signOut } from '../services/supabase';
 import { FREE_LAUNCH } from '../lib/flags';
 import { COACH_KV_KEYS, isManagedNow, useCoach } from './coachStore';
 import { startTrial as purchaseTrial } from '../services/billing';
-import { configureAnalytics, trackDayLogged, trackFirstTrainingCompleted, trackTrialStarted, type LoggedKind } from '../services/analytics';
+import { configureAnalytics, trackAppOpen, trackDayLogged, trackFirstTrainingCompleted, trackTrialStarted, type LoggedKind } from '../services/analytics';
 import { scaleMealEntry } from '../domain/meals';
 import { buildUsualGrams } from '../domain/usualGrams';
 import { uuid } from '../lib/id';
@@ -668,6 +668,10 @@ export const useStore = create<State>()((set, get) => {
       set({ analyticsId: id });
       configureAnalytics(id);
       if (id) {
+        // 同意の前に起きたこと（体験の開始）と今回の起動を、いま届ける。設定画面は初回の案内のあとでしか開けず、そのままでは体験の開始が届かない
+        const { trialStartedAt, firstOpenAt } = get();
+        if (firstOpenAt !== null) trackAppOpen(Math.max(0, Math.floor((Date.now() - firstOpenAt) / 86400000)));
+        if (trialStartedAt !== null) trackTrialStarted();
         persist(repo.setKv('analytics_id', id));
         persist(repo.setKv('analytics_consent', '1'));
       } else {

@@ -149,3 +149,13 @@ npm run eval:foods -- --min 0.95                     # 下限を下回ったら�
 ```
 
 評価リストは `eval/foods.json`（一般的な食品名のみ。個人の記録は入れない）。`accept` は先頭に出た食品名への正規表現で、空なら「見つからない」が正解。
+
+### 維持カロリー補正のバックテスト
+
+```bash
+npm run backtest:tdee                # シナリオごとに、補正なし／ありの予測誤差
+npm run backtest:tdee -- --grid      # 新しい値の重み × 1回の上限 を総当たりで比べる
+npm run backtest:tdee -- --json      # JSON で出す（--seeds <n> で乱数の種の数）
+```
+
+本当の TDEE が分かる合成データ（`src/domain/tdeeBacktest.ts`。種つき乱数なので、同じ種なら同じ結果。個人の記録は使わない）に、アプリと同じ `correctTdee` を週1回かけ、「次の14日の体重変化の予測」と「実測（7日平均の差）」の差を数字にする。係数の見直しは `--grid` で比べる。

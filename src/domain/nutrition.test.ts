@@ -100,6 +100,18 @@ describe('TDEEの実データ補正', () => {
     expect(r.tdee).toBeGreaterThanOrEqual(3000 * 0.85);
   });
 
+  it('係数を指定すると、新しい値の重みと1回の上限が使われる', () => {
+    const flat: Record<string, number> = {};
+    for (let i = 0; i < 28; i++) flat[k(day(-i))] = 70;
+    const base = { prevTdee: 2600, today: day(0), intake: intake(2400), weights: flat };
+    expect(correctTdee(base, { blendNew: 0.5 }).tdee).toBe(Math.round(2600 * 0.5 + 2400 * 0.5));
+    expect(correctTdee(base, { blendNew: 0.1 }).tdee).toBe(Math.round(2600 * 0.9 + 2400 * 0.1));
+    // 上限：摂取 1000 → 計測値 1000。重み 1 でも、maxStep 5% なら 2600 × 0.95 で止まる
+    const low = { ...base, intake: intake(1000) };
+    expect(correctTdee(low, { blendNew: 1, maxStep: 0.05 }).tdee).toBe(Math.round(2600 * 0.95));
+    expect(correctTdee(low, { blendNew: 1, maxStep: 0.5 }).tdee).toBe(1300);
+  });
+
   it('体重トレンドは3日以上の記録が要る', () => {
     expect(weightTrend({ [k(day(0))]: 70, [k(day(-1))]: 70 }, day(0))).toBeNull();
     expect(weightTrend({ [k(day(0))]: 70, [k(day(-1))]: 71, [k(day(-2))]: 72 }, day(0))).toBeCloseTo(71);

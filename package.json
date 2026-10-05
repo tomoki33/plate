@@ -72,7 +72,8 @@
     "screenshots": "node scripts/capture-screenshots.mjs",
     "eval:foods": "tsx scripts/eval-foods.ts",
     "eval:prompt": "tsx scripts/eval-prompt.ts",
-    "check:bundle": "tsx scripts/check-bundle.ts"
+    "check:bundle": "tsx scripts/check-bundle.ts",
+    "backtest:tdee": "tsx scripts/backtest-tdee.ts"
   },
   "private": true
 }

@@ -122,7 +122,7 @@ export function previewPlan(d: PlanDraft, s: Snapshot | null): PlanPreview {
   return { weekKcal, day: res.orig[idx], pPerKg: Math.round((d.proteinG / weight) * 10) / 10 };
 }
 
-/** 反映は「翌日 0:00（生徒のタイムゾーン）」から。その日の途中では目標を変えない */
+/** 既定の反映は「翌日 0:00（生徒のタイムゾーン）」から（その日の途中では目標を変えない）。sameDay=true のときだけ生徒の今日（開発ビルドの検証用の例外） */
 export function effectiveFromFor(s: Snapshot | null, now: Date = new Date(), sameDay = false): string {
   const today = todayIn(s?.tz || 'Asia/Tokyo', now);
   // sameDay は開発ビルドの検証用（呼び出し側で __DEV__ のときだけ渡す）。反映日を生徒の今日にして、その日のうちに確かめる

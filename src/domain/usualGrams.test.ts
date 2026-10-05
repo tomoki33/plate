@@ -31,6 +31,12 @@ describe('textStatesGrams', () => {
     expect(textStatesGrams('鶏むね200g 米', 150)).toBe(false);
     expect(textStatesGrams('米1150g', 150)).toBe(false);
   });
+  it('全角の数字・単位でも量の指定とみなす', () => {
+    expect(textStatesGrams('米１５０ｇ', 150)).toBe(true);
+    expect(textStatesGrams('米　１５０グラム', 150)).toBe(true);
+    expect(textStatesGrams('米150㌘', 150)).toBe(true);
+    expect(textStatesGrams('米１１５０ｇ', 150)).toBe(false);
+  });
 });
 
 describe('personalizeRows', () => {
@@ -46,5 +52,6 @@ describe('personalizeRows', () => {
       { foodId: 'egg', grams: 50, origin: 'estimate' as const },
     ];
     expect(personalizeRows(rows, usual, '米150g')).toEqual(rows);
+    expect(personalizeRows(rows, usual, '米１５０ｇ')).toEqual(rows);
   });
 });

@@ -6,7 +6,10 @@ import {
   expandQuery,
   findCatalogInQuery,
   matchesQuery,
+  MY_FOOD_ALIASES,
+  POPULAR_FOODS,
   rankFoods,
+  SEED_MY_FOODS,
   searchKey,
   shortName,
   type CatalogRow,
@@ -23,23 +26,37 @@ type FoodRow = [string, string, string, number, number, number, number];
 interface Food {
   id: string;
   name: string;
-  source: '成分表' | 'カタログ';
+  source: '成分表' | 'カタログ' | '自作';
   key: string;
 }
 
 const FOODS: Food[] = [
+  // 初回起動で必ず入るマイ食品（src/db/seed.ts と同じ id・名前・検索キー）。個人の記録は含まない
+  ...SEED_MY_FOODS.map((m) => ({ id: `myfood_${m.key}`, name: m.name, source: '自作' as const, key: searchKey(`${m.name} ${(MY_FOOD_ALIASES[m.key] ?? []).join(' ')}`) })),
   ...(foodsJson as unknown as FoodRow[]).map((r) => ({ id: `food_${r[0]}`, name: r[2], source: '成分表' as const, key: searchKey(r[2]) })),
   ...(catalogJson as CatalogRow[]).map((r) => ({ id: catalogFoodId(r[0]), name: r[1], source: 'カタログ' as const, key: catalogSearchText(r) })),
 ];
 const BY_ID = new Map(FOODS.map((f) => [f.id, f]));
 
+const POPULAR_ORDER = new Map(POPULAR_FOODS.map((p, i) => [`food_${p.code}`, i]));
+const SOURCE_ORDER = { 自作: 0, カタログ: 1, 成分表: 2 } as const;
+
+/**
+ * 検索語に合う候補。端末の searchFoodsDb と同じく、自作 → カタログ → 成分表、よく使う順、名前の短い順に並べてから 400 件で打ち切る
+ * （並べる前に切ると、「生」のような広い語で端末が優先する候補を落としてしまう）。
+ */
+export function candidateFoods(query: string): Food[] {
+  const ex = expandQuery(query);
+  return FOODS.filter((f) => matchesQuery(f.key, ex))
+    .sort((a, b) => SOURCE_ORDER[a.source] - SOURCE_ORDER[b.source] || (POPULAR_ORDER.get(a.id) ?? 999) - (POPULAR_ORDER.get(b.id) ?? 999) || a.name.length - b.name.length)
+    .slice(0, 400);
+}
+
 /** 検索語から、端末と同じ手順で食品を1件選ぶ。見つからなければ null */
 export function resolveFood(query: string): { id: string; name: string; source: string } | null {
   const q = query.trim();
   if (!q) return null;
-  const ex = expandQuery(q);
-  const rows = FOODS.filter((f) => matchesQuery(f.key, ex)).slice(0, 400);
-  const hit = rankFoods(q, rows, 1)[0];
+  const hit = rankFoods(q, candidateFoods(q), 1)[0];
   if (hit) return hit;
   const id = findCatalogInQuery(q);
   return (id && BY_ID.get(id)) || null;

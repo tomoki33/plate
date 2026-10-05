@@ -1,0 +1,30 @@
+# Supabase 無料枠の自動停止（1週間の低アクティビティ）対策。詳細: docs/supabase-keepalive.md
+name: Supabase keep-alive
+
+on:
+  schedule:
+    - cron: '17 3 */2 * *' # 2日おき 03:17 UTC（毎時0分は混むのでずらす）
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Query the database via PostgREST
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::Repository secrets SUPABASE_URL / SUPABASE_ANON_KEY are not set"
+            exit 1
+          fi
+          # RLS で匿名には0行しか返らないが、DB へのクエリは実行される。失敗（停止中は 5xx 等）なら job が落ちて通知される
+          curl --fail-with-body --silent --show-error --retry 3 --retry-delay 10 --max-time 30 \
+            "${SUPABASE_URL%/}/rest/v1/backups?select=user_id&limit=1" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}"
+          echo

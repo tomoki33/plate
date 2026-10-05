@@ -183,6 +183,12 @@ describe('目標プラン', () => {
     expect(effectiveFromFor(s, new Date('2026-09-30T14:59:00Z'))).toBe('2026-10-01'); // 日本 23:59
     expect(effectiveFromFor(s, new Date('2026-09-30T15:01:00Z'))).toBe('2026-10-02'); // 日本 翌0:01
   });
+  it('開発用：反映日を生徒の今日にできる（既定は翌日のまま）', () => {
+    const s = mk();
+    expect(effectiveFromFor(s, new Date('2026-09-30T14:59:00Z'), true)).toBe('2026-09-30');
+    expect(effectiveFromFor(s, new Date('2026-09-30T15:01:00Z'), true)).toBe('2026-10-01');
+    expect(effectiveFromFor(s, new Date('2026-09-30T14:59:00Z'), false)).toBe('2026-10-01');
+  });
   it('有効なプランは、今日以前でいちばん新しいもの', () => {
     const p = (id: string, from: string, created: string): PlanRow => ({ id, user_id: 'u', coach_id: 'c', target_weight: 60, pace_per_week: -0.5, protein_g: 130, fat_pct: 25, menus: [], effective_from: from, created_at: created });
     const plans = [p('a', '2026-09-20', '1'), p('b', '2026-09-30', '2'), p('c', '2026-10-05', '3')];

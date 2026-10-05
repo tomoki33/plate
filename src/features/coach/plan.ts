@@ -123,8 +123,10 @@ export function previewPlan(d: PlanDraft, s: Snapshot | null): PlanPreview {
 }
 
 /** 反映は「翌日 0:00（生徒のタイムゾーン）」から。その日の途中では目標を変えない */
-export function effectiveFromFor(s: Snapshot | null, now: Date = new Date()): string {
-  return addKey(todayIn(s?.tz || 'Asia/Tokyo', now), 1);
+export function effectiveFromFor(s: Snapshot | null, now: Date = new Date(), sameDay = false): string {
+  const today = todayIn(s?.tz || 'Asia/Tokyo', now);
+  // sameDay は開発ビルドの検証用（呼び出し側で __DEV__ のときだけ渡す）。反映日を生徒の今日にして、その日のうちに確かめる
+  return sameDay ? today : addKey(today, 1);
 }
 
 /** 生徒側：サーバーの目標プランのうち、いま（生徒の今日）から有効なもの。effective_from が新しい順の先頭 */

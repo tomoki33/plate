@@ -22,6 +22,7 @@ export default function GoalEdit() {
   const s = row?.payload ?? null;
   const [draft, setDraft] = useState(() => initialDraft(s, row?.plan ?? null));
   const [pick, setPick] = useState(false);
+  const [devSameDay, setDevSameDay] = useState(false); // 開発ビルド専用。__DEV__ が false なら setter も表示も出ない
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -44,10 +45,10 @@ export default function GoalEdit() {
     if (busy) return;
     setBusy(true);
     setErr(null);
-    const r = await api.setGoalPlan(row.userId, draft, chosen, effectiveFromFor(s));
+    const r = await api.setGoalPlan(row.userId, draft, chosen, effectiveFromFor(s, new Date(), __DEV__ && devSameDay));
     setBusy(false);
     if (!r.ok) return setErr(r.error);
-    showToast(`${row.studentName || '生徒'}さんに送りました（明日から反映）`);
+    showToast(`${row.studentName || '生徒'}さんに送りました（${__DEV__ && devSameDay ? '今日から反映' : '明日から反映'}）`);
     void refresh();
     router.back();
   };
@@ -125,7 +126,13 @@ export default function GoalEdit() {
       </ScrollView>
       <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, gap: 6 }}>
         {err ? <T size={12} c={color.brandText} style={{ textAlign: 'center' }}>{err}</T> : null}
-        <T size={11.5} c={color.sub} style={{ textAlign: 'center' }}>明日から反映し、生徒に通知します</T>
+        {__DEV__ && (
+          <Pressable accessibilityRole="switch" accessibilityState={{ checked: devSameDay }} onPress={() => setDevSameDay((v) => !v)} style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <T size={13} w={700}>{devSameDay ? '☑' : '☐'}</T>
+            <T size={12} c={color.sub}>DEV：反映日を今日にする（検証用）</T>
+          </Pressable>
+        )}
+        <T size={11.5} c={color.sub} style={{ textAlign: 'center' }}>{__DEV__ && devSameDay ? '今日から反映し、生徒に通知します' : '明日から反映し、生徒に通知します'}</T>
         <Pressable accessibilityRole="button" onPress={save} disabled={busy} style={{ height: 60, borderRadius: 10, backgroundColor: busy ? color.lineStrong : lightPalette.text, alignItems: 'center', justifyContent: 'center' }}>
           <T size={16} w={700} c={lightPalette.onText}>{busy ? '送っています…' : '保存して送る'}</T>
         </Pressable>

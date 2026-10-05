@@ -12,6 +12,8 @@ export const FORBIDDEN: readonly string[] = [
   '有料として扱う',
   '有料をオフにする',
   'EXPO_PUBLIC_AUTO_SAMPLE',
+  '反映日を今日にする',
+  '今日から反映',
 ];
 
 /** 本番バンドルに必ずある文字。検査が空振りしていない（バンドルを正しく読めている）ことの対照 */

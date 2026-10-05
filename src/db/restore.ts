@@ -56,7 +56,9 @@ export async function buildPayloadFrom(db: Db, now = Date.now()): Promise<Backup
 }
 
 export async function applyPayloadTo(db: Db, withTransaction: WithTransaction, p: BackupPayload): Promise<{ ok: boolean; error?: string }> {
-  if (!p || p.version !== BACKUP_VERSION || typeof p.tables !== 'object' || p.tables === null) return { ok: false, error: '対応していないバックアップです' };
+  if (!p || p.version !== BACKUP_VERSION || typeof p.tables !== 'object' || p.tables === null || Array.isArray(p.tables)) return { ok: false, error: '対応していないバックアップです' };
+  // 破壊的な置き換えの前に、渡されたテーブルがすべて配列か確かめる（配列でないと行が入らないまま消すだけになる）
+  if (Object.values(p.tables).some((rows) => !Array.isArray(rows))) return { ok: false, error: '対応していないバックアップです' };
   const t = p.tables as Record<string, never[]>;
   const insertChunks = async (table: SQLiteTable, rows: never[], ignoreDup: boolean) => {
     for (let i = 0; i < rows.length; i += 50) {

@@ -11,7 +11,7 @@ argument-hint: <番号...> | done <番号...>
 
 番号ごとに次を行う。
 
-1. `gh pr list --repo tomoki33/plate --search "<番号> in:body" --state merged` で、対応する PR がマージ済みか確認する。未マージなら何もせず報告する。
+1. `gh pr list --repo tomoki33/plate --search "<番号> in:body" --state merged` で、対応する PR がマージ済みか確認する。未マージなら何もせず報告する。マージ前には、PR の Copilot の指摘（`pulls/<番号>/comments`）がすべて対応済みかを確認する。
 2. マージ済みなら、その worktree の status を `completed` にする。
    `orca worktree set --worktree path:/Users/tomoki33/orca/workspaces/plate/<name> --workspace-status completed`
 3. #41 の本文で `- [ ] #<番号> ` を `- [x] #<番号> ` に直す。
@@ -45,7 +45,8 @@ argument-hint: <番号...> | done <番号...>
 - 作業が終わったらコミットし、ブランチを push して、main 向けの PR を作る。PR の本文に `Closes #<番号>` と、やったこと・残った人間の作業・確認方法を書く。
 - 本文の末尾に `🤖 Generated with [Claude Code](https://claude.com/claude-code)` を付ける。コミットメッセージの末尾には `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` を付ける。
 - PR を作ったら、`orca worktree set --worktree active --workspace-status in-review` を実行する。
-- main へのマージはしない。マージはユーザーが行う。
+- PR には Copilot のレビューが自動で付く。数分待って `gh api repos/tomoki33/plate/pulls/<PR番号>/comments` と `.../reviews` を確認し、指摘を 1 件ずつ検証する。直すべきものはすべて直して push し、直さないものはその理由を PR にコメントする。新しい指摘が付かなくなるまで繰り返す。
+- main へのマージはしない。マージは、Copilot の指摘への対応が済んだことを確認してから、オーケストレーター（またはユーザー）が行う。
 
 ## 最後に
 

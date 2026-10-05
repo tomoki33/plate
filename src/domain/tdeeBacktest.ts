@@ -59,6 +59,7 @@ export interface Check {
   tdeeBefore: number;
   tdeeAfter: number;
   trueTdee: number;
+  /** correctTdee が補正できた（記録が足りた）か。値が動かなかった場合も true */
   applied: boolean;
   /** 予測した、これから14日の体重変化（kg）。推定 TDEE と、これから14日に記録される摂取から */
   predictedKg: number | null;
@@ -88,11 +89,13 @@ export function simulate(sc: Scenario, params: CorrectionParams | null, opt: Sim
     const date = at(d);
     if (d >= 14 && d % 7 === 0) {
       const before = tdee;
+      let applied = false;
       if (params) {
         const res = correctTdee({ prevTdee: tdee, today: date, intake, weights }, params);
-        if (res.applied) tdee = res.tdee;
+        applied = res.applied;
+        if (applied) tdee = res.tdee;
       }
-      const c: Check = { day: d, tdeeBefore: before, tdeeAfter: tdee, trueTdee: sc.trueTdee(d), applied: tdee !== before, predictedKg: null, actualKg: null };
+      const c: Check = { day: d, tdeeBefore: before, tdeeAfter: tdee, trueTdee: sc.trueTdee(d), applied, predictedKg: null, actualKg: null };
       checks.push(c);
       pending.push({ check: c, day: d });
     }

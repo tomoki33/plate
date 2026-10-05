@@ -19,6 +19,12 @@ describe('TDEE補正のバックテスト', () => {
     }
   });
 
+  it('値が動かなくても、補正できたら applied は true', () => {
+    const sc = { name: 'x', trueTdee: () => 2400, initialTdee: 2400, deficit: 0 };
+    const { checks } = simulate(sc, {}, { seed: 1, weightNoiseKg: 0, intakeNoise: 0, weightMissRate: 0, intakeMissRate: 0 });
+    expect(checks.every((c) => c.applied && c.tdeeAfter === 2400)).toBe(true);
+  });
+
   it('補正しない場合、TDEEは動かない', () => {
     const { checks } = simulate(SCENARIOS[0], null, { seed: 1 });
     expect(checks.every((c) => c.tdeeAfter === SCENARIOS[0].initialTdee && !c.applied)).toBe(true);

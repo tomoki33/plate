@@ -97,7 +97,7 @@ describe('isManagedNow', () => {
     ['managed が無い', null, link()],
     ['link が無い', managed, null],
     ['目標を管理していない', managed, link({ managesGoals: false })],
-    ['リンクが active でない', managed, link({ status: 'ended' as MyLink['status'] })],
+    ['リンクが paused（active でない）', managed, link({ status: 'paused' })],
   ])('%s → false', (_n, m, l) => {
     setCoach(m, l);
     expect(isManagedNow()).toBe(false);

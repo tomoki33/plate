@@ -10,6 +10,7 @@
 // （無料／有料をサーバーで判定するには RevenueCat の webhook で権利を保存する必要がある。未対応）。
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import catalog from './catalog.json' with { type: 'json' };
+import { buildSystem } from './prompt.ts';
 
 const DAILY_LIMIT = 30;
 // 全ユーザー合計の1日上限。Gemini の費用の天井（1回 ≒ 1円未満）。Google Cloud の予算アラートと二段構えにする。
@@ -45,23 +46,7 @@ const SCHEMA = {
   required: ['items'],
 };
 
-// 数値の根拠を固定するため、食品は「カタログの key」で答えさせる。カタログにないものだけ、100gあたりの目安をAIが出す。
-const SYSTEM = `あなたは日本の食事を読み取る係です。ユーザーの写真や文章から、食べたものを1品ずつに分け、JSONで返します。
-
-各品について:
-- name: 一般的な食品・料理名（日本語）。
-- key: 下のカタログに同じ食品があれば、その key。近いものではなく、同じものがあるときだけ選ぶ（例：皮なしの鶏むね肉は chicken_breast_skinless、皮つきは chicken_breast_skin）。無ければ null。
-- grams: 写真や文章から見積もった重さ(g)。量が分からないものは一般的な1食分を仮定する。「2個」「1杯」などはgに換算する。
-- kcal・protein(たんぱく質g)・fat(脂質g)・carbs(炭水化物g): その食品100gあたりの目安を、整数で入れる。key があるときは使われないので、おおよそでよい。
-
-ルール:
-- 料理（牛丼、カレーライスなど）は、カタログに料理があればそれを1品として選ぶ。無ければ料理名のまま1品にして、目安を入れる。
-- ユーザーが「ひとこと」で補足したとき（例：米は半分残した）は、それを量に反映する。
-- 食べ物でないもの、判断できないものは items に含めない。
-- 説明文は書かず、指定のJSONだけを返す。
-
-カタログ（key: 名前）:
-${CATALOG_LIST}`;
+const SYSTEM = buildSystem(CATALOG_LIST);
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });

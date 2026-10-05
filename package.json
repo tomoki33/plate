@@ -73,7 +73,8 @@
     "eval:foods": "tsx scripts/eval-foods.ts",
     "eval:prompt": "tsx scripts/eval-prompt.ts",
     "check:bundle": "tsx scripts/check-bundle.ts",
-    "backtest:tdee": "tsx scripts/backtest-tdee.ts"
+    "backtest:tdee": "tsx scripts/backtest-tdee.ts",
+    "eval:models": "tsx scripts/eval-models.ts"
   },
   "private": true
 }

@@ -20,9 +20,21 @@ const { cases } = JSON.parse(readFileSync(dataPath, 'utf8')) as { cases: EvalCas
 const report = runEval(cases);
 const savePath = opt('--save');
 const comparePath = opt('--compare');
-const min = opt('--min');
+const json = args.includes('--json');
+// --json のときは stdout を JSON だけにする（補足の出力は stderr へ）
+const note = json ? console.error : console.log;
 
-if (args.includes('--json')) {
+let min: number | undefined;
+if (args.includes('--min')) {
+  const raw = opt('--min');
+  min = raw === undefined || raw.trim() === '' ? NaN : Number(raw);
+  if (!Number.isFinite(min) || min < 0 || min > 1) {
+    console.error(`--min には 0 から 1 の数を指定してください（受け取った値: ${raw ?? '(なし)'}）`);
+    process.exit(2);
+  }
+}
+
+if (json) {
   console.log(JSON.stringify(report, null, 2));
 } else {
   console.log(`食品名の命中率: ${pct(report.rate)}  (${report.hits} / ${report.total})  [${dataPath}]\n`);
@@ -37,18 +49,18 @@ if (comparePath) {
   const before = JSON.parse(readFileSync(comparePath, 'utf8')) as Snapshot;
   const d = compareSnapshots(before, report);
   const delta = (report.rate - before.rate) * 100;
-  console.log(`\n比較（${comparePath}）`);
-  console.log(`  ${pct(before.rate)} (${before.hits}/${before.total})  →  ${pct(report.rate)} (${report.hits}/${report.total})   ${delta >= 0 ? '+' : ''}${delta.toFixed(1)} pt`);
-  console.log(`  直った ${d.fixed.length} 件${d.fixed.length ? ': ' + d.fixed.join('、') : ''}`);
-  console.log(`  悪化した ${d.broken.length} 件${d.broken.length ? ': ' + d.broken.join('、') : ''}`);
+  note(`\n比較（${comparePath}）`);
+  note(`  ${pct(before.rate)} (${before.hits}/${before.total})  →  ${pct(report.rate)} (${report.hits}/${report.total})   ${delta >= 0 ? '+' : ''}${delta.toFixed(1)} pt`);
+  note(`  直った ${d.fixed.length} 件${d.fixed.length ? ': ' + d.fixed.join('、') : ''}`);
+  note(`  悪化した ${d.broken.length} 件${d.broken.length ? ': ' + d.broken.join('、') : ''}`);
 }
 
 if (savePath) {
   writeFileSync(savePath, JSON.stringify(toSnapshot(report), null, 2) + '\n');
-  console.log(`\n保存しました: ${savePath}`);
+  note(`\n保存しました: ${savePath}`);
 }
 
-if (min !== undefined && report.rate < Number(min)) {
-  console.error(`\n命中率 ${pct(report.rate)} が下限 ${pct(Number(min))} を下回りました`);
+if (min !== undefined && report.rate < min) {
+  console.error(`\n命中率 ${pct(report.rate)} が下限 ${pct(min)} を下回りました`);
   process.exit(1);
 }

@@ -30,8 +30,9 @@ export function buildUsualGrams(meals: readonly Pick<MealEntry, 'foodId' | 'gram
 
 /** 文章に「150g」のように量が書いてあるか（書いてあるなら、その量を優先する） */
 export function textStatesGrams(text: string, grams: number): boolean {
-  const n = String(Math.round(grams)).replace(/[.]/g, '\\.');
-  return new RegExp(`(^|[^0-9.])${n}\\s*(g|ｇ|グラム|㌘)`, 'i').test(text);
+  // 入力の解釈（parseQuantities）と同じく NFKC で正規化する。「米１５０ｇ」も量の指定として扱う
+  const n = String(Math.round(grams));
+  return new RegExp(`(^|[^0-9.])${n}\\s*(g|グラム)`, 'i').test(text.normalize('NFKC'));
 }
 
 interface Row {

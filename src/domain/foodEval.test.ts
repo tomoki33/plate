@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import evalData from '../../eval/foods.json';
-import { compareSnapshots, resolveFood, runEval, toSnapshot, type EvalCase } from './foodEval';
+import { candidateFoods, compareSnapshots, resolveFood, runEval, toSnapshot, type EvalCase } from './foodEval';
 
 const cases = evalData.cases as EvalCase[];
 
@@ -31,5 +31,21 @@ describe('評価の集計', () => {
     const d = compareSnapshots(before, after);
     expect(d.fixed).toEqual(['バナナ']);
     expect(d.broken).toEqual(['りんご']);
+  });
+});
+
+describe('端末の検索との一致', () => {
+  it('初期のマイ食品が優先される（味噌汁→マイ食品の味噌汁）', () => {
+    expect(resolveFood('味噌汁')).toMatchObject({ id: 'myfood_miso-soup', source: '自作' });
+    expect(resolveFood('プロテイン')).toMatchObject({ id: 'myfood_protein' });
+  });
+  it('400件を超える広い語でも、打ち切る前に端末と同じ順に並べる', () => {
+    const all = candidateFoods('生');
+    expect(all).toHaveLength(400);
+    const order = { 自作: 0, カタログ: 1, 成分表: 2 } as const;
+    const tiers = all.map((f) => order[f.source]);
+    expect(tiers).toEqual([...tiers].sort((a, b) => a - b));
+    // カタログに合う行は、成分表の行より先に残る
+    expect(all.some((f) => f.source === 'カタログ')).toBe(true);
   });
 });

@@ -1,7 +1,9 @@
 import * as ImagePicker from 'expo-image-picker';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { Directory, File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 import { uuid } from '../lib/id';
+import { resizeTarget } from '../domain/photoSize';
 
 /** 撮った（選んだ）写真。base64 は、AIに送るために縮めたもの */
 export interface PickedPhoto {
@@ -19,7 +21,7 @@ export interface PickResult {
   permissionDenied?: boolean;
 }
 
-const OPTIONS: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.5, base64: true, allowsEditing: false, exif: false };
+const OPTIONS: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 1, base64: false, allowsEditing: false, exif: false };
 
 /** カメラで撮る／ライブラリから選ぶ。キャンセルは photo: null（エラーではない） */
 export async function pickPhoto(source: 'camera' | 'library'): Promise<PickResult> {
@@ -39,10 +41,31 @@ export async function pickPhoto(source: 'camera' | 'library'): Promise<PickResul
   }
 }
 
-function toResult(r: ImagePicker.ImagePickerResult): PickResult {
+async function toResult(r: ImagePicker.ImagePickerResult): Promise<PickResult> {
   if (r.canceled || !r.assets?.length) return { photo: null };
   const a = r.assets[0];
-  return { photo: { uri: a.uri, base64: a.base64 ?? undefined } };
+  const photo = await shrink(a.uri, a.width, a.height);
+  if (!photo) return { photo: null, error: '写真を縮小できませんでした。もう一度撮り直すか、文章で書いてください。' };
+  return { photo };
+}
+
+/** 長辺を縮めて JPEG にし、AIに送る base64 を作る（大きい写真で 413 になるのを防ぎ、通信も速くする）。失敗したら null */
+async function shrink(uri: string, width: number, height: number): Promise<PickedPhoto | null> {
+  const ctx = ImageManipulator.manipulate(uri);
+  let img: Awaited<ReturnType<typeof ctx.renderAsync>> | null = null;
+  try {
+    const target = resizeTarget(width, height);
+    if (target) ctx.resize(target);
+    img = await ctx.renderAsync();
+    const out = await img.saveAsync({ format: SaveFormat.JPEG, compress: 0.7, base64: true });
+    return out.base64 ? { uri: out.uri, base64: out.base64 } : null;
+  } catch {
+    return null;
+  } finally {
+    // ネイティブの画像を持ち続けないよう、明示的に解放する（manipulateAsync と同じ）
+    img?.release();
+    ctx.release();
+  }
 }
 
 export const PHOTO_DIR = 'photos';

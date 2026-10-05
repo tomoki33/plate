@@ -116,8 +116,8 @@
 - [ ] Sentry でプロジェクト（React Native）を作り、DSN・組織スラッグ・プロジェクト名を控える。設定 → Security & Privacy で **Prevent Storing of IP Addresses** をオン（データの保管地域も、作成時に選ぶ）
 - [ ] EAS に環境変数 `EXPO_PUBLIC_SENTRY_DSN`（production）、シークレット `SENTRY_AUTH_TOKEN`（Organization Auth Token。ソースマップのアップロード用）、`SENTRY_ORG`・`SENTRY_PROJECT` を登録（`app.json` の `@sentry/react-native` プラグインに `organization`・`project` を書いてもよい）
 - [ ] Sentry のアラートルール「新しい問題が出たらメール通知」を作る（完了条件「クラッシュが通知で届く」）
-- [ ] **新しい EAS ビルドが必要**（ネイティブモジュールが増えるため。OTA 更新では入らない）：`eas build --profile production --platform ios` → 審査提出
-- [ ] 本番ビルドで一度だけテスト送信し、Sentry の画面で内容に記録・メール・ユーザーIDが入っていないことを確認する
+- [ ] **新しい EAS ビルドが必要**（ネイティブモジュールが増えるため。OTA 更新では入らない）：`npx eas-cli@latest build --profile production --platform ios` → 審査提出
+- [ ] 本番ビルドで一度だけテスト送信し、Sentry の画面で内容に記録・メール・ユーザーIDが入っていないことを確認する。**ネイティブのクラッシュ（例：テスト用に `Sentry.nativeCrash()` を一時的に呼ぶ）も1回送り、その内容も確認する**（ネイティブのクラッシュは `beforeSend` を通らず、ネイティブ SDK が直接送るため）
 - [ ] `docs/privacy-policy.md` と `web/legal.html` の更新（本 PR で反映済み）を、公開ページに反映する
 
 ## F. 計測（公開直後から入れる。README_launch 5章）

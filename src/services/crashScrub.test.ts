@@ -15,6 +15,11 @@ const leaky = () =>
     extra: { weight: 62.5, meals: ['鶏むね肉'] },
     tags: { goal: 'cut' },
     modules: { a: '1' },
+    transaction: 'GET /meal/鶏むね肉',
+    logger: 'weight',
+    fingerprint: ['62.5'],
+    threads: { values: [{ name: 'main', stacktrace: { frames: [{ function: 'f', vars: { kg: 62.5 } }] } }] },
+    sdk: { name: 'sentry.javascript.react-native', version: '7', integrations: ['x'] },
     breadcrumbs: [{ category: 'console', message: 'weight=62.5' }],
     logentry: { message: 'weight %s', params: [62.5] },
     exception: {
@@ -28,7 +33,9 @@ const leaky = () =>
       ],
     },
     contexts: {
-      app: { app_version: '1.0.0', device_app_hash: 'hash' },
+      app: { app_version: '1.0.0', device_app_hash: 'hash', app_start_time: 't', app_memory: 1 },
+      culture: { locale: 'ja-JP', timezone: 'Asia/Tokyo' },
+      runtime: { name: 'hermes' },
       os: { name: 'iOS', version: '18.0' },
       device: { model: 'iPhone16,1', name: "Taro's iPhone", family: 'iPhone' },
       trace: { trace_id: 't' },
@@ -39,7 +46,7 @@ const leaky = () =>
 describe('scrubEvent', () => {
   it('removes user, request, extra, tags, breadcrumbs and identifiers', () => {
     const e = scrubEvent(leaky())! as unknown as Record<string, unknown>;
-    for (const k of ['user', 'request', 'extra', 'tags', 'breadcrumbs', 'server_name', 'logentry', 'modules']) {
+    for (const k of ['user', 'request', 'extra', 'tags', 'breadcrumbs', 'server_name', 'logentry', 'modules', 'transaction', 'logger', 'fingerprint', 'threads']) {
       expect(e[k]).toBeUndefined();
     }
   });
@@ -61,16 +68,22 @@ describe('scrubEvent', () => {
     const e = scrubEvent(leaky())!;
     expect(Object.keys(e.contexts!).sort()).toEqual(['app', 'device', 'os']);
     expect(e.contexts!.device).toEqual({ model: 'iPhone16,1', family: 'iPhone' });
-    expect((e.contexts!.app as Record<string, unknown>).device_app_hash).toBeUndefined();
+    expect(e.contexts!.app).toEqual({ app_version: '1.0.0' });
     expect(e.contexts!.os).toEqual({ name: 'iOS', version: '18.0' });
   });
 
   it('leaves no record or identity string anywhere in the output', () => {
     const json = JSON.stringify(scrubEvent(leaky()));
-    for (const s of ['62.5', '鶏むね肉', 'a@example.com', '1.2.3.4', 'taro', "Taro's", 'Bearer', 'INSERT INTO']) {
+    for (const s of ['62.5', '鶏むね肉', 'a@example.com', '1.2.3.4', 'taro', "Taro's", 'ja-JP', 'Tokyo', 'Bearer', 'INSERT INTO']) {
       expect(json).not.toContain(s);
     }
     expect(json).toContain('app.plate.pfc@1.0.0+1');
+  });
+
+  it('keeps only whitelisted top-level keys, so unknown fields cannot leak', () => {
+    const e = scrubEvent({ ...leaky(), brand_new_field: { weight: 62.5 } } as unknown as ErrorEvent)! as unknown as Record<string, unknown>;
+    expect(Object.keys(e).sort()).toEqual(['contexts', 'environment', 'event_id', 'exception', 'level', 'message', 'release', 'sdk']);
+    expect(e.sdk).toEqual({ name: 'sentry.javascript.react-native', version: '7' });
   });
 
   it('handles events without exception or contexts', () => {

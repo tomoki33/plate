@@ -1,73 +1,72 @@
 /**
  * クラッシュ報告に載せる内容を、送る直前に絞る（純粋関数。Sentry 本体には依存しない）。
  * 食事・体重・プロフィールなどの記録や、ユーザーを特定できる情報が、エラーの文言・追加情報・
- * 操作履歴・端末名に紛れて外へ出ないよう、残すものを許可リストで決める。
+ * 操作履歴・端末名に紛れて外へ出ないよう、元のイベントから消すのではなく、
+ * **許可した項目だけで新しいイベントを作る**（SDK に新しい項目が増えても、勝手には出ない）。
  *
- * 残す：エラーの種類とスタックトレース（どのコードで落ちたか）、アプリ／OS／端末機種の基本情報、
- *       リリース・環境・レベル・イベントID・日時。
- * 消す：ユーザー、リクエスト、エラー文言、メッセージ、追加情報（extra）、タグ、操作履歴、
- *       端末名やサーバー名などの識別子、スペースの記録。
+ * 残す：エラーの種類とスタックの位置（ファイル・関数・行）、アプリのバージョン、OS・端末の機種、
+ *       リリース・環境・レベル・イベントID・日時・SDK名。
+ * 残さない：上記以外のすべて（ユーザー、リクエスト、エラー文言、メッセージ、extra、タグ、操作履歴、
+ *       スレッド、トランザクション、フィンガープリント、端末名、ロケール、タイムゾーンなど）。
+ *
+ * 注意：JS から渡せない都合で、`beforeSend` は JS 側で処理されたイベントにだけ効く。
+ * ネイティブのクラッシュは、ネイティブ SDK が直接送る（このフィルタは通らない）。
  */
 import type { ErrorEvent } from '@sentry/react-native';
 
-const KEEP_CONTEXTS = ['app', 'os', 'device', 'runtime', 'culture'] as const;
-const KEEP_DEVICE_KEYS = ['family', 'model', 'model_id', 'brand', 'manufacturer', 'simulator', 'arch', 'memory_size', 'screen_width_pixels', 'screen_height_pixels', 'screen_density'];
 const REDACTED = '[redacted]';
 
-type Ctx = Record<string, unknown>;
+type Rec = Record<string, unknown>;
 
-function pick(src: Ctx | undefined, keys: readonly string[]): Ctx | undefined {
-  if (!src) return undefined;
-  const out: Ctx = {};
-  for (const k of keys) if (src[k] !== undefined) out[k] = src[k];
+const EVENT_KEYS = ['event_id', 'level', 'platform', 'timestamp', 'release', 'dist', 'environment'];
+const EXCEPTION_KEYS = ['type', 'module', 'thread_id'];
+const MECHANISM_KEYS = ['type', 'handled', 'synthetic', 'source', 'is_exception_group', 'exception_id', 'parent_id'];
+const FRAME_KEYS = ['filename', 'abs_path', 'function', 'module', 'lineno', 'colno', 'in_app', 'platform', 'package', 'instruction_addr', 'image_addr', 'symbol_addr'];
+const SDK_KEYS = ['name', 'version'];
+// contexts は、種類ごとに残す項目も決める（device_app_hash・端末名・ロケール・タイムゾーン・メモリ量などは残さない）
+const CONTEXT_KEYS: Record<string, string[]> = {
+  app: ['app_version', 'app_build', 'app_identifier', 'app_name'],
+  os: ['name', 'version', 'build'],
+  device: ['family', 'model', 'model_id', 'brand', 'manufacturer', 'simulator', 'arch'],
+};
+
+function pick(src: unknown, keys: string[]): Rec {
+  const out: Rec = {};
+  if (!src || typeof src !== 'object') return out;
+  for (const k of keys) if ((src as Rec)[k] !== undefined) out[k] = (src as Rec)[k];
   return out;
 }
 
 export function scrubEvent<T extends ErrorEvent>(event: T): T | null {
-  const e = event as unknown as Record<string, unknown>;
+  const src = event as unknown as Rec;
+  const out: Rec = pick(src, EVENT_KEYS);
 
-  // 識別子・自由記述になりうるものは丸ごと消す
-  delete e.user;
-  delete e.request;
-  delete e.extra;
-  delete e.tags;
-  delete e.breadcrumbs;
-  delete e.server_name;
-  delete e.logentry;
-  delete e.modules;
-  delete e.sdkProcessingMetadata;
-  if (e.message !== undefined) e.message = REDACTED;
-
-  // エラー文言は、データベースの値などを含みうるので消す（種類とスタックは残す）
-  const exception = e.exception as { values?: Record<string, unknown>[] } | undefined;
-  for (const v of exception?.values ?? []) {
-    if (v.value !== undefined) v.value = REDACTED;
-    delete v.data;
+  // メッセージ・エラー文言は、データベースの値などを含みうるので、中身は送らない（種類とスタックは残す）
+  if (src.message !== undefined) out.message = REDACTED;
+  const values = (src.exception as { values?: unknown[] } | undefined)?.values;
+  if (Array.isArray(values)) {
+    out.exception = {
+      values: values.map((v) => {
+        const ex = pick(v, EXCEPTION_KEYS);
+        if ((v as Rec).value !== undefined) ex.value = REDACTED;
+        const mech = (v as Rec).mechanism;
+        if (mech) ex.mechanism = pick(mech, MECHANISM_KEYS);
+        const frames = ((v as Rec).stacktrace as { frames?: unknown[] } | undefined)?.frames;
+        if (Array.isArray(frames)) ex.stacktrace = { frames: frames.map((f) => pick(f, FRAME_KEYS)) };
+        return ex;
+      }),
+    };
   }
 
-  // スタックのフレームに付く変数・コード片は残さない（ファイル名・関数名・行番号だけ残す）
-  for (const v of exception?.values ?? []) {
-    const frames = (v.stacktrace as { frames?: Record<string, unknown>[] } | undefined)?.frames ?? [];
-    for (const f of frames) {
-      delete f.vars;
-      delete f.pre_context;
-      delete f.context_line;
-      delete f.post_context;
-    }
-  }
-
-  // contexts は許可した種類・項目だけ残す（端末名などの識別子は落とす）
-  const ctx = e.contexts as Record<string, Ctx> | undefined;
+  const ctx = src.contexts as Record<string, unknown> | undefined;
   if (ctx) {
-    const next: Record<string, Ctx> = {};
-    for (const k of KEEP_CONTEXTS) {
-      if (!ctx[k]) continue;
-      next[k] = k === 'device' ? pick(ctx[k], KEEP_DEVICE_KEYS)! : { ...ctx[k] };
-    }
-    if (next.app) delete next.app.device_app_hash; // 端末を追跡できる識別子
-    e.contexts = next;
+    const contexts: Record<string, Rec> = {};
+    for (const [name, keys] of Object.entries(CONTEXT_KEYS)) if (ctx[name]) contexts[name] = pick(ctx[name], keys);
+    out.contexts = contexts;
   }
-  return event;
+  if (src.sdk) out.sdk = pick(src.sdk, SDK_KEYS);
+
+  return out as unknown as T;
 }
 
 /** 操作履歴（ボタン・通信・ログ）は1件も残さない */

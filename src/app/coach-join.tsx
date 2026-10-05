@@ -32,6 +32,7 @@ function CoachJoinScreen() {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 開いたとき・props が変わったときに、state を props に合わせる（意図した書き方。派生値への置き換えは挙動が変わるため見送り）
     if (params.code) setCode(String(params.code).toUpperCase().replace(CODE_CHARS, '').slice(0, 6));
   }, [params.code]);
 

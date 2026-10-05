@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { N, Notice, Sheet, T, color, hairline, lightPalette, radius } from '@/design-system';
+import { N, Notice, Sheet, T, color, hairline, lightPalette } from '@/design-system';
 import { CoachFrame } from '../../../components/coach/Frames';
 import * as api from '../../../features/coach/api';
 import { P_STEP, F_STEP, W_STEP, currentWeightOf, effectiveFromFor, goalFor, initialDraft, paceChoices, planWarnings, previewPlan, signedPace, withFat, withPace, withProtein, withTarget } from '../../../features/coach/plan';

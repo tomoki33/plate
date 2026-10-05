@@ -18,6 +18,7 @@ export function EditMealSheet({ group, onClose }: { group: MealGroup | null; onC
 
   useEffect(() => {
     if (!group) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 開いたとき・props が変わったときに、state を props に合わせる（意図した書き方。派生値への置き換えは挙動が変わるため見送り）
     setSlot(group.slot);
     setGrams(Object.fromEntries(group.items.filter((i) => i.grams !== null).map((i) => [i.id, i.grams as number])));
   }, [group]);

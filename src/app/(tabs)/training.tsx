@@ -1,7 +1,6 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTopInset } from '../../components/coach/Frames';
 import { Badge, N, Notice, T, color, font, hairline, radius } from '@/design-system';
 import { getFoodsByIds } from '../../db/repo';
@@ -28,7 +27,6 @@ const REST_TEXT = '#FBF7F3';
 const REST_ACCENT = '#F7CDBB';
 
 export default function TrainingScreen() {
-  const insets = useSafeAreaInsets();
   const topInset = useTopInset();
   const router = useRouter();
   const now = useNow();
@@ -55,6 +53,7 @@ export default function TrainingScreen() {
     if (!justCompleted) return;
     clearJustCompleted();
     void sendWorkoutDoneNotification({ P: Math.max(0, Math.round(w.remaining.P)), C: Math.max(0, Math.round(w.remaining.C)) });
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 開いたとき・props が変わったときに、state を props に合わせる（意図した書き方。派生値への置き換えは挙動が変わるため見送り）
     if (!notifyPromptSeen) setNotifyOpen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [justCompleted]);
@@ -250,6 +249,7 @@ function Recording({ insetsTop }: { insetsTop: number }) {
   const sel = ex?.sets[ses.sel];
   // 種目を1つも入れずに始めたら、最初に種目を選ぶシートを出す
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 開いたとき・props が変わったときに、state を props に合わせる（意図した書き方。派生値への置き換えは挙動が変わるため見送り）
     if (ses.ex.length === 0) setPicker(true);
   }, [ses.ex.length]);
 
@@ -399,7 +399,9 @@ function DoneModal({ open, onClose, onMeal, w, median: med }: { open: boolean; o
   const mealSets = useStore((s) => s.mealSets);
   const setSessionMemo = useStore((s) => s.setSessionMemo);
   const [memo, setMemo] = useState('');
-  useEffect(() => setMemo(rec?.memo ?? ''), [rec?.id, open]); // eslint-disable-line react-hooks/exhaustive-deps
+  // state を props に合わせる（意図した書き方。派生値への置き換えは挙動が変わるため見送り）
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
+  useEffect(() => setMemo(rec?.memo ?? ''), [rec?.id, open]);
   if (!rec) return null;
   const rem = w.remaining;
   const dC = w.today.C - w.plan.days[w.ti].C;

@@ -1,7 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ReviewNoteCard } from '../../components/coach/CoachBanners';
 import { useTopInset } from '../../components/coach/Frames';
 import { Badge, N, T, color, hairline, radius } from '@/design-system';
@@ -22,7 +21,6 @@ const DOW = ['月', '火', '水', '木', '金', '土', '日'];
 const kgTimes = (kg: number) => (kg > 0 ? `${kg}kg × ` : '× ');
 
 export default function ReviewScreen() {
-  const insets = useSafeAreaInsets();
   const topInset = useTopInset();
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -39,6 +37,7 @@ export default function ReviewScreen() {
   const [sel, setSel] = useState<string>(dateParam || w.todayKey);
   const [confirm, setConfirm] = useState<string | null>(null);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 開いたとき・props が変わったときに、state を props に合わせる（意図した書き方。派生値への置き換えは挙動が変わるため見送り）
     if (dateParam) setSel(dateParam);
   }, [dateParam]);
 

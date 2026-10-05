@@ -141,7 +141,7 @@ describe('目標プラン', () => {
     expect(paceChoices('maintain', 60)).toEqual([0]);
   });
   it('目標体重を動かして目的が変わっても、ペースは範囲に収まる', () => {
-    const d = { targetWeight: 60, pace: -1, proteinG: 130, fatPct: 25, menuIds: [] };
+    const d = { targetWeight: 45, pace: -1, proteinG: 130, fatPct: 25, menuIds: [] };
     expect(withTarget(d, 70, 50).pace).toBeCloseTo(0.25, 5); // 増量の上限（50kg×0.5%）
     expect(withTarget({ ...d, pace: 0 }, 40, 50).pace).toBe(-0.33);
   });

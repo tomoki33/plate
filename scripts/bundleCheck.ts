@@ -29,10 +29,15 @@ export function decodeEscapes(js: string): string {
 export function coachFlagOff(decoded: string): boolean | null {
   const getter = /"COACH_MODE",\{enumerable:!0,get:function\(\)\{return ([A-Za-z_$][\w$]*)\}\}\)/.exec(decoded);
   if (!getter) return null;
-  const v = getter[1];
-  const decl = new RegExp(`[,;\\s]${v.replace(/\$/g, '\\$')}=(!0|!1|true|false)[,;]`).exec(decoded);
-  if (!decl) return null;
-  return decl[1] === '!1' || decl[1] === 'false';
+  // 縮めた変数名はモジュールごとに使い回されるので、旗のモジュール（前後の __d( の間）の中だけで宣言を探す
+  const start = decoded.lastIndexOf('__d(', getter.index);
+  if (start < 0) return null;
+  const next = decoded.indexOf('__d(', getter.index);
+  const scope = decoded.slice(start, next < 0 ? undefined : next);
+  const name = getter[1].replace(/\$/g, '\\$');
+  const decls = [...scope.matchAll(new RegExp(`[,;{\\s]${name}=(!0|!1|true|false)[,;}]`, 'g'))];
+  if (decls.length !== 1) return null;
+  return decls[0][1] === '!1' || decls[0][1] === 'false';
 }
 
 export type BundleReport = { forbiddenFound: string[]; controlsMissing: string[]; coachOff: boolean | null };

@@ -1,0 +1,10 @@
+{
+  "date": "2026-10-06",
+  "set": "eval/prompt-cases.json (26 cases x 2 runs, text only)",
+  "results": [
+    { "model": "gemini-flash-lite-latest", "resolvedTo": "gemini-3.5-flash-lite", "correct": 48, "total": 52, "errors": 2, "avgSeconds": 2.5, "inputTokens": 2046, "outputTokens": 86, "costPerCallUsd": 0.00083 },
+    { "model": "gemini-3.8-flash", "correct": null, "total": 52, "note": "503 high demand; not measured" },
+    { "model": "gemini-3.5-flash", "correct": null, "total": 52, "note": "429 free-tier quota; not measured" },
+    { "model": "gemini-3.1-pro-preview", "correct": null, "total": 52, "note": "429 free-tier quota; not measured" }
+  ]
+}

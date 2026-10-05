@@ -103,7 +103,8 @@ describe('復元（置き換え）', () => {
 
   it('版が違う・形が壊れたバックアップは、何も変えずに断る', async () => {
     await put(s.bodyLog, body('keep', '2026-09-01'));
-    for (const bad of [payload({}, { version: 999 }), null, { version: BACKUP_VERSION, createdAt: 1 }, { version: BACKUP_VERSION, createdAt: 1, tables: null }]) {
+    for (const bad of [payload({}, { version: 999 }), null, { version: BACKUP_VERSION, createdAt: 1 }, { version: BACKUP_VERSION, createdAt: 1, tables: null },
+      { version: BACKUP_VERSION, createdAt: 1, tables: [] }, payload({ body_log: {} as never }), payload({ body_log: 'x' as never }), payload({ meal_entry: [], body_log: null as never }), payload({ body_log: {} as never }, { mode: 'merge' })]) {
       expect(await applyPayloadTo(db, tx, bad as never)).toEqual({ ok: false, error: '対応していないバックアップです' });
     }
     expect(await ids(s.bodyLog)).toEqual(['keep']);

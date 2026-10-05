@@ -99,6 +99,7 @@ export function photoErrorMessage(e: unknown): { error: string; needsLogin?: boo
   const status = e instanceof EstimateHttpError ? e.status : null;
   if (status === 401) return { error: 'ログインの有効期限が切れたようです。もう一度ログインしてください。', needsLogin: true };
   if (status === 429) return { error: '今日の推定の回数を使い切りました。明日また使えます。' };
+  if (status === 503) return { error: '現在、写真の推定が混み合っています。しばらくしてからお試しください。食べたものを文章で書くと、推定できます。' };
   if (status === 413) return { error: '写真が大きすぎて送れませんでした。撮り直すか、文章で書いてください。' };
   if (status !== null) return { error: `推定に失敗しました（エラー ${status}）。少し待って、もう一度お試しください。` };
   return { error: '通信できませんでした。電波の良い場所で、もう一度お試しください。' };

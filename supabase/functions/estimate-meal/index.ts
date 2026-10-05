@@ -12,6 +12,9 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 import catalog from './catalog.json' with { type: 'json' };
 
 const DAILY_LIMIT = 30;
+// 全ユーザー合計の1日上限。Gemini の費用の天井（1回 ≒ 1円未満）。Google Cloud の予算アラートと二段構えにする。
+// 変更は secrets の GLOBAL_DAILY_LIMIT（再デプロイ不要）。
+const GLOBAL_DAILY_LIMIT = Number(Deno.env.get('GLOBAL_DAILY_LIMIT') ?? '3000');
 const MODEL = Deno.env.get('ESTIMATE_MODEL') ?? 'gemini-flash-lite-latest';
 
 // 食品カタログ（scripts/build-catalog.py が生成）。AIには一覧から選ばせ、値はアプリ側のカタログ／成分表から引く。
@@ -91,6 +94,10 @@ Deno.serve(async (req) => {
   const { data: ok, error: qerr } = await admin.rpc('consume_ai_quota', { p_user: u.user.id, p_limit: DAILY_LIMIT });
   if (qerr) return json({ error: 'quota check failed' }, 500);
   if (!ok) return json({ error: 'daily limit reached' }, 429);
+  // 全体の上限。確認に失敗したときは止めず（マイグレーション未適用でも動かす）、ログだけ残す。予算アラートが最後の砦
+  const { data: gok, error: gerr } = await admin.rpc('consume_ai_global_quota', { p_limit: GLOBAL_DAILY_LIMIT });
+  if (gerr) console.error('global quota check failed', gerr.message);
+  else if (!gok) return json({ error: 'service busy' }, 503);
 
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
     method: 'POST',

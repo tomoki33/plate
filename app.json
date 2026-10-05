@@ -74,7 +74,8 @@
           "microphonePermission": false
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "@sentry/react-native"
     ],
     "scheme": "plate",
     "experiments": {

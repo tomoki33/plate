@@ -15,6 +15,7 @@ import { ToastHost } from '../components/Toast';
 import { T, applyScheme, color, lightPalette } from '@/design-system';
 import { checkEntitlements, identifyBilling, initBilling } from '../services/billing';
 import { trackAppOpen } from '../services/analytics';
+import { initCrashReporting, withCrashReporting } from '../services/crashReporting';
 import { planOf } from '../domain/entitlement';
 import { readBodyComposition } from '../services/healthkit';
 import { currentSession, onAccountChange, toAccount } from '../services/supabase';
@@ -23,6 +24,9 @@ import { useCoachSync } from '../features/coach/useCoachSync';
 import { runBackup } from '../store/backupRunner';
 import { useCoach } from '../store/coachStore';
 import { useStore } from '../store/store';
+
+// クラッシュ監視は、ほかの処理より先に初期化する（DSN 未設定なら何もしない）
+initCrashReporting();
 
 // 起動画面は、準備（フォント・DB・ログイン状態の確認）が終わるまで出したままにする
 void SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -38,7 +42,7 @@ if (Platform.OS === 'web') {
 LogBox.ignoreLogs(['props.pointerEvents is deprecated', 'shadow*']);
 
 /** DB を開いてから本体を出す（Web は非同期で開く必要がある） */
-export default function RootLayout() {
+function RootLayout() {
   const [dbReady, setDbReady] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
   useEffect(() => {
@@ -50,6 +54,8 @@ export default function RootLayout() {
   if (!dbReady) return <View style={{ flex: 1, backgroundColor: color.bg }} />;
   return <App />;
 }
+
+export default withCrashReporting(RootLayout);
 
 function ErrorView({ message }: { message: string }) {
   return (

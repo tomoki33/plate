@@ -1,7 +1,7 @@
-const { getDefaultConfig } = require('expo/metro-config');
+const { getSentryExpoConfig } = require('@sentry/react-native/metro');
 
 /** @type {import('expo/metro-config').MetroConfig} */
-const config = getDefaultConfig(__dirname);
+const config = getSentryExpoConfig(__dirname);
 
 // Drizzle のマイグレーション（.sql）と、Web での expo-sqlite（wasm）
 config.resolver.sourceExts.push('sql');

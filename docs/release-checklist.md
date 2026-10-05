@@ -24,7 +24,7 @@
 ## B. 外部サービス（アカウントが必要）
 1. **Supabase**（無料枠で可）
    - **他アプリと同じプロジェクトに相乗りする場合は `supabase db push` を使わない**：CLIのマイグレーション履歴（バージョン番号）はプロジェクト単位で共有され、各リポジトリの `supabase/migrations/` はお互いの存在を知らないため、バージョン番号の衝突や「Remote migration versions not found」のようなズレが起きる（実際に発生した）。代わりに、ダッシュボードの SQL Editor で `supabase/migrations/*.sql` の中身をそのまま貼って実行する（順番に：`20260928190100_backups.sql` → `20260928190200_meal_photos.sql` → … → `20261002000000_ai_global_quota.sql`。新しいものは、Edge Function を再デプロイする前に適用する）。これならCLIの履歴管理に触れないので、相手のマイグレーション状態を壊さない
-   - 単独の新規プロジェクトを使う場合は、通常どおり `supabase link` → `supabase db push --linked` でよい
+   - 単独の新規プロジェクトを使う場合は、通常どおり `supabase link` → `supabase db push --linked` でよい。すでに SQL Editor で適用済みの専有プロジェクトを `db push` に移すときは、先に履歴の baseline 化が要る（`docs/supabase-migrations.md`）
    - Authentication → Providers：Apple（Client IDs に `app.plate.pfc`）を有効化。ログインは Apple のみ（Google・メールは提供しない。メールのコード送付には独自SMTPが要るため）
    - `supabase functions deploy estimate-meal` / `delete-account`
    - `supabase secrets set GEMINI_API_KEY=...`

@@ -40,3 +40,7 @@ yarn-error.*
 /ios
 /android
 supabase/.temp/
+
+# Supabase CLI
+supabase/.temp/
+supabase/.branches/

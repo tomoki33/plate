@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { badgeText, daysLogged, kpisOf, lastLoggedDate, mealBars, needCount, proteinAvg, sortStalled, summarize, warningsOf, weekMarks, weightAvg7, weightSeries } from './aggregate';
 import { addKey, diffDays, todayIn, weekStartKey, weekdayOf } from './dateKeys';
-import { activePlan, effectiveFromFor, goalFor, initialDraft, previewPlan, profilePatchFromPlan, signedPace, withFat, withPace, withProtein, withTarget } from './plan';
+import { activePlan, effectiveFromFor, goalFor, initialDraft, paceChoices, planWarnings, previewPlan, profilePatchFromPlan, signedPace, withFat, withPace, withProtein, withTarget } from './plan';
 import { buildSnapshot, prFlags } from './snapshot';
 import type { PlanRow, Snapshot, StudentRow } from './types';
 
@@ -133,6 +133,38 @@ describe('目標プラン', () => {
     expect(withFat(d0, 60).fatPct).toBe(40);
     expect(withFat(d0, 3).fatPct).toBe(10);
     expect(withPace(d0, 'bulk', 0.25).pace).toBe(0.25);
+  });
+  it('ペースの選択肢は体重の%（減量 0.5〜1%/週、増量 0.25〜0.5%/週）', () => {
+    expect(paceChoices('cut', 50)).toEqual([0.25, 0.33, 0.42, 0.5]);
+    expect(paceChoices('cut', 100)).toEqual([0.5, 0.67, 0.83, 1]);
+    expect(paceChoices('bulk', 60)).toEqual([0.15, 0.2, 0.25, 0.3]);
+    expect(paceChoices('maintain', 60)).toEqual([0]);
+  });
+  it('目標体重を動かして目的が変わっても、ペースは範囲に収まる', () => {
+    const d = { targetWeight: 45, pace: -1, proteinG: 130, fatPct: 25, menuIds: [] };
+    expect(withTarget(d, 70, 50).pace).toBeCloseTo(0.25, 5); // 増量の上限（50kg×0.5%）
+    expect(withTarget({ ...d, pace: 0 }, 40, 50).pace).toBe(-0.33);
+  });
+  it('同じ目的のままの目標体重の変更では、範囲外のペースを勝手に直さない', () => {
+    const d = { targetWeight: 45, pace: -0.75, proteinG: 130, fatPct: 25, menuIds: [] };
+    expect(withTarget(d, 44.5, 50).pace).toBe(-0.75);
+  });
+  it('選択肢はどれを選んでも警告が出ない（丸めの誤差）', () => {
+    const s = mk({ weight: { entries: [{ date: TODAY, kg: 65 }] } });
+    for (const m of paceChoices('bulk', 65)) {
+      expect(planWarnings({ targetWeight: 70, pace: m, proteinG: 130, fatPct: 25, menuIds: [] }, s).filter((w) => w.includes('増量ペース'))).toEqual([]);
+    }
+  });
+  it('範囲を超えるペース・低すぎる kcal で警告が出る', () => {
+    const light = mk({ weight: { entries: [{ date: TODAY, kg: 50 }] } });
+    const base = { targetWeight: 45, pace: -0.5, proteinG: 100, fatPct: 25, menuIds: [] };
+    expect(planWarnings(base, light)).toEqual([]); // 50kg の 1% = 0.5kg/週 ちょうど
+    expect(planWarnings({ ...base, pace: -0.75 }, light)[0]).toContain('1%/週');
+    const bulk = { ...base, targetWeight: 55, pace: 0.5 };
+    expect(planWarnings(bulk, light)[0]).toContain('増量ペース');
+    const lowKcal = mk({ weight: { entries: [{ date: TODAY, kg: 100 }] }, profile: { ...mk().profile, tdee: 1500 } });
+    expect(planWarnings({ ...base, targetWeight: 90, pace: -1 }, lowKcal).some((w) => w.includes('1,200kcal'))).toBe(true);
+    expect(planWarnings({ ...base, targetWeight: 99.8, pace: 0 }, lowKcal)).toEqual([]);
   });
   it('kcal は目標とペースから自動。Pは指定どおり、Cは残り', () => {
     const s = mk({ weight: { entries: [{ date: TODAY, kg: 65 }] } });

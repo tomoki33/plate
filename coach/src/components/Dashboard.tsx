@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { kpisOf, mealBars, needCount, recentMealDay, sortJoined, sortStalled, summarize, trainingHistory, weekMarks, weightAvg7, weightSeries, type StudentSummary } from '@core/features/coach/aggregate';
 import { addKey, shortMd, todayIn, weekStartKey } from '@core/features/coach/dateKeys';
-import { PACE_STEPS, currentWeightOf, effectiveFromFor, goalFor, initialDraft, previewPlan, signedPace, withFat, withPace, withProtein, withTarget, type PlanDraft } from '@core/features/coach/plan';
+import { currentWeightOf, effectiveFromFor, goalFor, initialDraft, paceChoices, planWarnings, previewPlan, signedPace, withFat, withPace, withProtein, withTarget, type PlanDraft } from '@core/features/coach/plan';
 import type { CoachInfo, CoachMenu } from '@core/features/coach/types';
 import * as api from '@/lib/api';
 import { supabase } from '@/lib/supabase';
@@ -287,7 +287,7 @@ function GoalEditor({ s, menus, onDone }: { s: StudentSummary; menus: CoachMenu[
         {btn('＋', () => setD(withTarget(d, d.targetWeight + 0.5, cur)))}
         {goal !== 'maintain' ? (
           <span style={{ display: 'inline-flex', background: 'var(--track)', borderRadius: 8, padding: 3, gap: 2 }}>
-            {PACE_STEPS.map((m) => { const on = Math.abs(Math.abs(d.pace) - m) < 0.001; return <button key={m} onClick={() => setD(withPace(d, goal, m))} className="num" style={{ height: 36, padding: '0 12px', border: 'none', borderRadius: 6, background: on ? '#fff' : 'transparent', fontWeight: 600 }}>{signedPace(goal, m) > 0 ? '+' : '−'}{m.toFixed(2)} kg/週</button>; })}
+            {paceChoices(goal, cur).map((m) => { const on = Math.abs(Math.abs(d.pace) - m) < 0.001; return <button key={m} onClick={() => setD(withPace(d, goal, m))} className="num" style={{ height: 36, padding: '0 12px', border: 'none', borderRadius: 6, background: on ? '#fff' : 'transparent', fontWeight: 600 }}>{signedPace(goal, m) > 0 ? '+' : '−'}{m.toFixed(2)} kg/週</button>; })}
           </span>
         ) : <span style={{ fontSize: 12, color: 'var(--sub)' }}>維持として送ります</span>}
       </div>
@@ -307,7 +307,7 @@ function GoalEditor({ s, menus, onDone }: { s: StudentSummary; menus: CoachMenu[
         {menus.map((m) => { const on = d.menuIds.includes(m.id); return <button key={m.id} onClick={() => setD({ ...d, menuIds: on ? d.menuIds.filter((x) => x !== m.id) : [...d.menuIds, m.id] })} className="btn" style={{ height: 34, background: on ? K : '#fff', color: on ? '#fff' : K }}>{m.name}</button>; })}
         {!menus.length && <span style={{ fontSize: 12, color: 'var(--sub)' }}>アプリの「メニュー」タブで作れます</span>}
       </div>
-      {p.weekKcal / 7 < 1200 && <span style={{ color: 'var(--brand-text)', fontSize: 12 }}>1日の平均が 1,200kcal を下回ります。ペースをゆるめてください。</span>}
+      {planWarnings(d, snap).map((w) => <span key={w} style={{ color: 'var(--brand-text)', fontSize: 12 }}>{w}</span>)}
       {err && <span style={{ color: 'var(--brand-text)', fontSize: 12 }}>{err}</span>}
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12 }}><span style={{ fontSize: 12, color: 'var(--sub)' }}>明日から反映し、生徒に通知します</span><button className="btn primary" disabled={busy} onClick={save}>{busy ? '送っています…' : '保存して送る'}</button></div>
     </section>

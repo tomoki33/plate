@@ -3,12 +3,13 @@
  * 生徒側のアプリと同じ目標エンジンで kcal を出すので、コーチが見る数字と生徒に出る数字が一致する。
  */
 import { computeTargets } from '../../domain/engine';
-import { defaultPk, weekKcalOf, type Goal } from '../../domain/nutrition';
+import { defaultPk, paceBounds, paceOptions, weekKcalOf, type Goal } from '../../domain/nutrition';
 import type { DayTarget, DayType } from '../../domain/types';
 import { addKey, todayIn } from './dateKeys';
 import type { PlanRow, Snapshot } from './types';
 
-export const PACE_STEPS = [0.25, 0.5, 0.75] as const;
+/** 1日平均の下限（kcal）。生徒のアプリの警告（checkWarnings）と同じ値 */
+export const MIN_DAY_KCAL = 1200;
 export const P_STEP = 5;
 export const F_STEP = 5;
 export const F_MIN = 10;
@@ -36,8 +37,11 @@ export function goalFor(currentKg: number, targetKg: number): Goal {
   if (targetKg > currentKg + 0.5) return 'bulk';
   return 'maintain';
 }
-/** 0.25／0.5／0.75 kg/週 を、目的に合わせて符号つきにする。維持は 0 */
+/** ペースの大きさ（kg/週）を、目的に合わせて符号つきにする。維持は 0 */
 export const signedPace = (goal: Goal, magnitude: number) => (goal === 'maintain' ? 0 : goal === 'cut' ? -Math.abs(magnitude) : Math.abs(magnitude));
+
+/** 選べるペースの大きさ（kg/週）。生徒のアプリと同じ、体重の % の範囲（減量 0.5〜1%/週、増量 0.25〜0.5%/週） */
+export const paceChoices = (goal: Goal, weightKg: number): number[] => paceOptions(goal, weightKg).map(Math.abs);
 
 export function currentWeightOf(s: Snapshot | null): number {
   const e = s?.weight?.entries ?? [];
@@ -65,12 +69,38 @@ export function initialDraft(s: Snapshot | null, plan: PlanRow | null): PlanDraf
 export function withTarget(d: PlanDraft, targetWeight: number, currentKg: number): PlanDraft {
   const t = clamp(roundTo(targetWeight, W_STEP), 30, 200);
   const goal = goalFor(currentKg, t);
-  const mag = Math.abs(d.pace) || 0.5;
+  // 目的が変わったときだけ、新しい範囲に収める（元の値がなければ、範囲の下限側から少し上）。同じ目的なら大きさはそのまま（範囲外なら警告で知らせる）
+  let mag = Math.abs(d.pace);
+  if (goal !== goalFor(currentKg, d.targetWeight)) {
+    const { min, max } = paceBounds(goal, currentKg);
+    mag = mag ? clamp(mag, min, max) : (paceChoices(goal, currentKg)[1] ?? 0);
+  } else if (!mag) mag = paceChoices(goal, currentKg)[1] ?? 0;
   return { ...d, targetWeight: t, pace: signedPace(goal, mag) };
 }
 export const withPace = (d: PlanDraft, goal: Goal, magnitude: number): PlanDraft => ({ ...d, pace: signedPace(goal, magnitude) });
 export const withProtein = (d: PlanDraft, g: number): PlanDraft => ({ ...d, proteinG: clamp(Math.round(g / P_STEP) * P_STEP, 40, 400) });
 export const withFat = (d: PlanDraft, pct: number): PlanDraft => ({ ...d, fatPct: clamp(Math.round(pct / F_STEP) * F_STEP, F_MIN, F_MAX) });
+
+/**
+ * 危険な目標の警告。範囲を超えるペース（減量は体重の1%/週、増量は0.5%/週まで）と、1日平均が 1,200kcal 未満のとき。
+ * 範囲の考え方は生徒のアプリ（domain/nutrition の checkWarnings）と同じ。
+ * スナップショットには性別・身長がなく基礎代謝は出せないので、kcal は固定の下限で見る。
+ */
+export function planWarnings(d: PlanDraft, s: Snapshot | null): string[] {
+  const weight = currentWeightOf(s);
+  const goal = goalFor(weight, d.targetWeight);
+  const out: string[] = [];
+  if (goal !== 'maintain') {
+    const { max } = paceBounds(goal, weight);
+    // 選択肢は小数第2位に丸めている。丸めた上限までは範囲内として扱う
+    if (Math.abs(d.pace) > Math.round(max * 100) / 100 + 1e-6) {
+      out.push(goal === 'cut' ? `減量ペースが体重の1%/週（${max.toFixed(2)}kg）を超えています。` : `増量ペースが体重の0.5%/週（${max.toFixed(2)}kg）を超えています。`);
+    }
+  }
+  const kcal = previewPlan(d, s).weekKcal / 7;
+  if (kcal < MIN_DAY_KCAL) out.push(`1日の平均が ${MIN_DAY_KCAL.toLocaleString()}kcal を下回ります。ペースをゆるめてください。`);
+  return out;
+}
 
 export interface PlanPreview {
   weekKcal: number;

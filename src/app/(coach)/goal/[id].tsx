@@ -4,7 +4,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { N, Notice, Sheet, T, color, hairline, lightPalette, radius } from '@/design-system';
 import { CoachFrame } from '../../../components/coach/Frames';
 import * as api from '../../../features/coach/api';
-import { PACE_STEPS, P_STEP, F_STEP, W_STEP, currentWeightOf, effectiveFromFor, goalFor, initialDraft, previewPlan, signedPace, withFat, withPace, withProtein, withTarget } from '../../../features/coach/plan';
+import { P_STEP, F_STEP, W_STEP, currentWeightOf, effectiveFromFor, goalFor, initialDraft, paceChoices, planWarnings, previewPlan, signedPace, withFat, withPace, withProtein, withTarget } from '../../../features/coach/plan';
 import { useCoach } from '../../../store/coachStore';
 import { useStore } from '../../../store/store';
 
@@ -32,7 +32,8 @@ export default function GoalEdit() {
   if (!row) return <CoachFrame back={back}><View style={{ padding: 28 }}><T size={14} c={color.sub}>この生徒は見つかりませんでした。</T></View></CoachFrame>;
 
   const chosen = menus.filter((m) => draft.menuIds.includes(m.id));
-  const tooLow = preview.weekKcal / 7 < 1200;
+  const warnings = planWarnings(draft, s);
+  const paces = paceChoices(goal, cur);
   const stepBtn = (label: string, onPress: () => void, size = 56, a11y?: string) => (
     <Pressable accessibilityRole="button" accessibilityLabel={a11y} onPress={onPress} style={{ width: size, height: size, borderWidth: hairline, borderColor: color.lineStrong, borderRadius: size === 56 ? 10 : 8, alignItems: 'center', justifyContent: 'center', backgroundColor: color.surface }}>
       <T size={size === 56 ? 22 : 18}>{label}</T>
@@ -74,7 +75,7 @@ export default function GoalEdit() {
           </View>
           {goal !== 'maintain' ? (
             <View style={{ flexDirection: 'row', backgroundColor: color.track, borderRadius: 8, padding: 3 }}>
-              {PACE_STEPS.map((m) => {
+              {paces.map((m) => {
                 const on = Math.abs(Math.abs(draft.pace) - m) < 0.001;
                 return (
                   <Pressable key={m} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => setDraft(withPace(draft, goal, m))} style={{ flex: 1, height: 40, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? color.surface : 'transparent' }}>
@@ -115,7 +116,7 @@ export default function GoalEdit() {
             </View>
           ))}
         </View>
-        {tooLow ? <View style={{ marginHorizontal: 16 }}><Notice>1日の平均が 1,200kcal を下回ります。ペースをゆるめてください。</Notice></View> : null}
+        {warnings.map((w) => <View key={w} style={{ marginHorizontal: 16, marginTop: 6 }}><Notice>{w}</Notice></View>)}
 
         <Pressable accessibilityRole="button" onPress={() => setPick(true)} style={{ marginHorizontal: 16, marginTop: 10, minHeight: 56, paddingHorizontal: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: color.surface, borderWidth: hairline, borderColor: color.line, borderRadius: 12, gap: 12 }}>
           <T size={15}>トレーニングメニュー</T>

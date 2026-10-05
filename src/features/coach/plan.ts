@@ -69,10 +69,12 @@ export function initialDraft(s: Snapshot | null, plan: PlanRow | null): PlanDraf
 export function withTarget(d: PlanDraft, targetWeight: number, currentKg: number): PlanDraft {
   const t = clamp(roundTo(targetWeight, W_STEP), 30, 200);
   const goal = goalFor(currentKg, t);
-  const choices = paceChoices(goal, currentKg);
-  const { min, max } = paceBounds(goal, currentKg);
-  // 目的が変わっても、範囲に収まるペースにする（元の値がなければ、範囲の下限側から少し上）
-  const mag = Math.abs(d.pace) ? clamp(Math.abs(d.pace), min, max) : (choices[1] ?? 0);
+  // 目的が変わったときだけ、新しい範囲に収める（元の値がなければ、範囲の下限側から少し上）。同じ目的なら大きさはそのまま（範囲外なら警告で知らせる）
+  let mag = Math.abs(d.pace);
+  if (goal !== goalFor(currentKg, d.targetWeight)) {
+    const { min, max } = paceBounds(goal, currentKg);
+    mag = mag ? clamp(mag, min, max) : (paceChoices(goal, currentKg)[1] ?? 0);
+  } else if (!mag) mag = paceChoices(goal, currentKg)[1] ?? 0;
   return { ...d, targetWeight: t, pace: signedPace(goal, mag) };
 }
 export const withPace = (d: PlanDraft, goal: Goal, magnitude: number): PlanDraft => ({ ...d, pace: signedPace(goal, magnitude) });
@@ -90,7 +92,8 @@ export function planWarnings(d: PlanDraft, s: Snapshot | null): string[] {
   const out: string[] = [];
   if (goal !== 'maintain') {
     const { max } = paceBounds(goal, weight);
-    if (Math.abs(d.pace) > max + 1e-6) {
+    // 選択肢は小数第2位に丸めている。丸めた上限までは範囲内として扱う
+    if (Math.abs(d.pace) > Math.round(max * 100) / 100 + 1e-6) {
       out.push(goal === 'cut' ? `減量ペースが体重の1%/週（${max.toFixed(2)}kg）を超えています。` : `増量ペースが体重の0.5%/週（${max.toFixed(2)}kg）を超えています。`);
     }
   }

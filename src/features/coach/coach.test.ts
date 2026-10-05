@@ -145,6 +145,16 @@ describe('目標プラン', () => {
     expect(withTarget(d, 70, 50).pace).toBeCloseTo(0.25, 5); // 増量の上限（50kg×0.5%）
     expect(withTarget({ ...d, pace: 0 }, 40, 50).pace).toBe(-0.33);
   });
+  it('同じ目的のままの目標体重の変更では、範囲外のペースを勝手に直さない', () => {
+    const d = { targetWeight: 45, pace: -0.75, proteinG: 130, fatPct: 25, menuIds: [] };
+    expect(withTarget(d, 44.5, 50).pace).toBe(-0.75);
+  });
+  it('選択肢はどれを選んでも警告が出ない（丸めの誤差）', () => {
+    const s = mk({ weight: { entries: [{ date: TODAY, kg: 65 }] } });
+    for (const m of paceChoices('bulk', 65)) {
+      expect(planWarnings({ targetWeight: 70, pace: m, proteinG: 130, fatPct: 25, menuIds: [] }, s).filter((w) => w.includes('増量ペース'))).toEqual([]);
+    }
+  });
   it('範囲を超えるペース・低すぎる kcal で警告が出る', () => {
     const light = mk({ weight: { entries: [{ date: TODAY, kg: 50 }] } });
     const base = { targetWeight: 45, pace: -0.5, proteinG: 100, fatPct: 25, menuIds: [] };

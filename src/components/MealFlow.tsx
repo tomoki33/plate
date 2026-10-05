@@ -5,6 +5,7 @@ import { Image, Modal, Pressable, ScrollView, TextInput, View } from 'react-nati
 import { Badge, Field, N, Notice, PrimaryButton, Segmented, Sheet, StepBox, T, color, font, hairline, radius } from '@/design-system';
 import { getFoodsByIds, searchFoodsDb } from '../db/repo';
 import { SLOT_LABEL, shortName } from '../domain/foodSearch';
+import { buildUsualGrams, personalizeRows } from '../domain/usualGrams';
 import type { FoodItem, MealSet, Slot } from '../domain/models';
 import type { Pfc } from '../domain/types';
 import { estimateMeal, type EstimateRow } from '../services/ai';
@@ -86,6 +87,8 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
   const [pickQuery, setPickQuery] = useState('');
   const [pickResults, setPickResults] = useState<FoodItem[]>([]);
   const aiLeft = Math.max(0, aiLimit - aiUsed);
+  // 食品ごとの前回の量（端末内の記録から。サーバーには送らない）
+  const usual = useMemo(() => buildUsualGrams(allMeals), [allMeals]);
   const reqId = useRef(0);
 
   useEffect(() => {
@@ -130,9 +133,9 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
     if (picker?.mode === 'replace') {
       const i = picker.index;
       // 量はそのまま引き継ぐ（見つからなかった行は、その食品のいつもの量）
-      setAiRows((rows) => rows!.map((r, j) => (j === i ? { token: r.token, name: f.name, grams: r.grams ?? f.defaultG ?? 100, per100, foodId: f.id, origin: 'manual' } : r)));
+      setAiRows((rows) => rows!.map((r, j) => (j === i ? { token: r.token, name: f.name, grams: r.grams ?? usual.get(f.id) ?? f.defaultG ?? 100, per100, foodId: f.id, origin: 'manual' } : r)));
     } else {
-      setAiRows((rows) => [...(rows ?? []), { token: f.name, name: f.name, grams: f.defaultG ?? 100, per100, foodId: f.id, origin: 'manual' }]);
+      setAiRows((rows) => [...(rows ?? []), { token: f.name, name: f.name, grams: usual.get(f.id) ?? f.defaultG ?? 100, per100, foodId: f.id, origin: 'manual' }]);
     }
     setPicker(null);
     setPickQuery('');
@@ -166,7 +169,7 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
       (a, it) => {
         const f = setFoods[it.foodId];
         if (!f) return a;
-        const v = scale(f, it.g);
+        const v = scale(f, usual.get(it.foodId) ?? it.g);
         return { kcal: a.kcal + v.kcal, P: a.P + v.P, F: a.F + v.F, C: a.C + v.C };
       },
       { kcal: 0, P: 0, F: 0, C: 0 },
@@ -200,7 +203,7 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
         // 推定できたときだけ、今日の回数を使う（失敗や、ログイン待ちでは減らさない）
         consumeAi(todayKey);
         setQuote(aiText.trim() ? `「${aiText.trim()}」` : '写真のみ');
-        setAiRows(res.rows);
+        setAiRows(personalizeRows(res.rows, usual, aiText));
       }
     } finally {
       setAiBusy(false);
@@ -294,7 +297,7 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
                 {!query.trim() && <T size={11} c={color.sub} style={{ paddingVertical: 6 }}>マイ食品とよく使う食品</T>}
                 {results.length === 0 && query.trim() !== '' && <T size={13} c={color.sub} style={{ paddingVertical: 12 }}>見つかりませんでした。</T>}
                 {results.map((f) => (
-                  <Pressable key={f.id} accessibilityRole="button" onPress={() => setGram({ food: f, g: f.defaultG ?? 100 })} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 54, borderBottomWidth: hairline, borderBottomColor: color.line, gap: 8 }}>
+                  <Pressable key={f.id} accessibilityRole="button" onPress={() => setGram({ food: f, g: usual.get(f.id) ?? f.defaultG ?? 100 })} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 54, borderBottomWidth: hairline, borderBottomColor: color.line, gap: 8 }}>
                     <View style={{ flex: 1 }}>
                       <T size={14}>{shortName(f.name)}</T>
                       <N size={11} w={500} c={color.sub}>100gあたり P{f.p} F{f.f} C{f.c}・{f.kcal}kcal</N>
@@ -313,7 +316,7 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
           {mode === 1 && gram && gramV && (
             <View>
               <View style={{ paddingHorizontal: 18, paddingTop: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <T size={16} w={700} style={{ flex: 1 }}>{shortName(gram.food.name)}</T>
+                <T size={16} w={700} style={{ flex: 1 }}>{shortName(gram.food.name)}{usual.has(gram.food.id) ? <T size={11} c={color.sub}>　前回の量から</T> : null}</T>
                 <Pressable accessibilityRole="button" onPress={() => setGram(null)} style={{ minHeight: 44, justifyContent: 'center', paddingLeft: 12 }}>
                   <T size={12} c={color.sub}>戻る</T>
                 </Pressable>
@@ -496,7 +499,7 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                     <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
                       <T size={14} w={500}>{shortName(r.name!)}</T>
-                      <Tag>{r.origin === 'manual' ? '手動で選択' : r.origin === 'estimate' ? 'AIの目安' : r.origin === 'photo' ? '写真から推定' : r.origin === 'ai' ? 'AI推定' : '成分表と照合'}</Tag>
+                      <Tag>{r.personalized ? '前回の量' : r.origin === 'manual' ? '手動で選択' : r.origin === 'estimate' ? 'AIの目安' : r.origin === 'photo' ? '写真から推定' : r.origin === 'ai' ? 'AI推定' : '成分表と照合'}</Tag>
                     </View>
                     <View style={{ width: 132 }}>
                       <StepBox value={String(r.grams)} onDown={() => setGrams(r.grams! - 10)} onUp={() => setGrams(r.grams! + 10)} height={40} buttonWidth={40} size={17} radiusPx={radius.input} label={`${r.token}の`} />

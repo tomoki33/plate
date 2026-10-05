@@ -13,6 +13,8 @@ export interface EstimateRow {
   foodId?: string;
   /** 'table'：文章と成分表の照合、'ai'：AIが文章から推定、'photo'：写真から推定、'estimate'：カタログにないので値もAIの目安、'manual'：利用者が追加・差し替え */
   origin?: 'table' | 'ai' | 'photo' | 'estimate' | 'manual';
+  /** 前回の量に置き換えた行（確認画面で「前回の量」と示す） */
+  personalized?: boolean;
 }
 
 export interface EstimateResult {

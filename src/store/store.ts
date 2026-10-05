@@ -14,6 +14,7 @@ import { COACH_KV_KEYS, isManagedNow, useCoach } from './coachStore';
 import { startTrial as purchaseTrial } from '../services/billing';
 import { trackDayLogged, trackFirstTrainingCompleted, trackTrialStarted, type LoggedKind } from '../services/analytics';
 import { scaleMealEntry } from '../domain/meals';
+import { buildUsualGrams } from '../domain/usualGrams';
 import { uuid } from '../lib/id';
 
 export interface Session {
@@ -504,11 +505,13 @@ export const useStore = create<State>()((set, get) => {
 
     addFromMealSet(ms, foods, opts = {}) {
       const byId = new Map(foods.map((f) => [f.id, f]));
+      const usual = buildUsualGrams(get().meals);
       const items: MealItemInput[] = ms.items.flatMap((it) => {
         const f = byId.get(it.foodId);
         if (!f) return [];
-        const k = it.g / 100;
-        return [{ foodId: f.id, name: f.name, grams: it.g, kcal: Math.round(f.kcal * k), P: round1(f.p * k), F: round1(f.f * k), C: round1(f.c * k) }];
+        const g = usual.get(f.id) ?? it.g;
+        const k = g / 100;
+        return [{ foodId: f.id, name: f.name, grams: g, kcal: Math.round(f.kcal * k), P: round1(f.p * k), F: round1(f.f * k), C: round1(f.c * k) }];
       });
       if (!items.length) return null;
       const groupId = get().addMealItems(ms.name, items, { mealSetId: ms.id, ...opts });

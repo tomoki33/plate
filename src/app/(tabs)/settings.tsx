@@ -19,6 +19,7 @@ import { ACTIVITY_LEVELS, GOAL_JP, ageOf, bmr, checkWarnings, nearestActivity, p
 import { DAY_LABELS, DAY_TYPE_JP, type DayType } from '../../domain/types';
 import { avg7 } from '../../domain/weight';
 import { readBodyComposition } from '../../services/healthkit';
+import { analyticsConfigured } from '../../services/analytics';
 import { backupLabel } from '../../store/backupRunner';
 import { templateType, useWeek } from '../../store/selectors';
 import { FREE_LAUNCH } from '../../lib/flags';
@@ -251,6 +252,21 @@ export default function SettingsScreen() {
           <CardRow title="いま取り込む（直近30日）" right={<T size={13} w={700}>取り込む</T>} onPress={importHealth} last />
         </Card>
         {hk && <T size={12} c={color.sub} style={{ paddingHorizontal: 20, paddingTop: 6 }}>{hk}</T>}
+
+        {analyticsConfigured() && (
+          <>
+            {label('使われ方の計測')}
+            <Card>
+              <CardRow
+                title="使われ方を送る（任意）"
+                meta="起動・記録した日・トレーニング完了の回数だけ。食事や体重の中身、名前・メールは送りません"
+                right={<Switch value={st.analyticsId !== null} onValueChange={st.setAnalyticsConsent} trackColor={{ true: color.text, false: color.lineStrong }} thumbColor={color.surface} />}
+                minHeight={72}
+                last
+              />
+            </Card>
+          </>
+        )}
 
         {label(FREE_LAUNCH ? 'データ' : 'プランとデータ')}
         <Card>

@@ -127,7 +127,15 @@ export function weightTrend(weights: Record<string, number>, end: Date): number 
 
 export const BLEND_NEW = 0.3;
 const MIN_INTAKE_DAYS = 10;
-const MAX_STEP = 0.15;
+export const MAX_STEP = 0.15;
+
+/** 補正の係数。バックテスト（scripts/backtest-tdee.ts）で動かして比べるために差し替えられる。省略時はアプリの値 */
+export interface CorrectionParams {
+  /** 新しい値の重み（0〜1） */
+  blendNew?: number;
+  /** 1回の変化の上限（前回値に対する割合） */
+  maxStep?: number;
+}
 
 /**
  * 実データによるTDEE補正。
@@ -135,7 +143,9 @@ const MAX_STEP = 0.15;
  * 急変を避けるため、前回値との加重平均（新30%）をとり、1回の変化は±15%までにする。
  * 摂取の記録が14日中10日未満、または体重トレンドが出せないときは補正しない。
  */
-export function correctTdee(inp: CorrectionInput): CorrectionResult {
+export function correctTdee(inp: CorrectionInput, params: CorrectionParams = {}): CorrectionResult {
+  const blendNew = params.blendNew ?? BLEND_NEW;
+  const maxStep = params.maxStep ?? MAX_STEP;
   const days = Array.from({ length: 14 }, (_, i) => key(shift(inp.today, -i)));
   const logged = days.filter((d) => inp.intake[d] !== undefined && inp.intake[d] > 0);
   if (logged.length < MIN_INTAKE_DAYS) return { tdee: inp.prevTdee, applied: false, reason: '食事の記録が足りません' };
@@ -144,9 +154,9 @@ export function correctTdee(inp: CorrectionInput): CorrectionResult {
   if (now === null || before === null) return { tdee: inp.prevTdee, applied: false, reason: '体重の記録が足りません' };
   const avgKcal = logged.reduce((a, d) => a + inp.intake[d], 0) / logged.length;
   const measured = avgKcal - ((now - before) * KCAL_PER_KG) / 14;
-  const blended = inp.prevTdee * (1 - BLEND_NEW) + measured * BLEND_NEW;
-  const lo = inp.prevTdee * (1 - MAX_STEP);
-  const hi = inp.prevTdee * (1 + MAX_STEP);
+  const blended = inp.prevTdee * (1 - blendNew) + measured * blendNew;
+  const lo = inp.prevTdee * (1 - maxStep);
+  const hi = inp.prevTdee * (1 + maxStep);
   return { tdee: Math.round(Math.min(hi, Math.max(lo, blended))), applied: true, measured: Math.round(measured) };
 }
 

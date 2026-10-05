@@ -191,3 +191,28 @@ export function coefFromPercents(highPct: number, offPct: number): { high: numbe
 
 /** 1日のたんぱく質（g）。体重 × P係数 */
 export const dailyProtein = (weightKg: number, pk: number) => Math.round(weightKg * pk);
+
+export interface PaceInfo {
+  /** 体重に対する週あたりの割合（%）。小数1桁 */
+  pct: number;
+  /** 範囲内での速さの一言 */
+  word: 'ゆっくり' | 'ふつう' | '速い';
+}
+
+/** ペースが体重の何%/週か、範囲のどのあたりか。維持は null */
+export function paceInfo(goal: Goal, weightKg: number, pace: number): PaceInfo | null {
+  if (goal === 'maintain' || weightKg <= 0) return null;
+  const { min, max } = paceBounds(goal, weightKg);
+  const mag = Math.abs(pace);
+  const t = max > min ? (mag - min) / (max - min) : 0;
+  return {
+    pct: Math.round((mag / weightKg) * 1000) / 10,
+    word: t <= 0.2 ? 'ゆっくり' : t >= 0.8 ? '速い' : 'ふつう',
+  };
+}
+
+/** ペース選択の注記。速いほど食事制限がきつくなる（減量）／脂肪が増えやすくなる（増量） */
+export const paceHint = (goal: Goal): string =>
+  goal === 'cut'
+    ? '速いほど食事がきつく、続けにくくなります。迷ったら「ゆっくり」〜「ふつう」から。'
+    : '速いほど脂肪も増えやすくなります。迷ったら「ゆっくり」〜「ふつう」から。';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ACTIVITY_LEVELS, DEFAULT_PROFILE, SPREAD_PRESETS, bmr, checkWarnings, clampPace, coefFromPercents, correctTdee, dailyProtein, defaultPace, initialTdee, matchSpreadPreset, nearestActivity, paceBounds, paceOptions, spreadPercents, weekKcalOf, weightTrend } from './nutrition';
+import { ACTIVITY_LEVELS, DEFAULT_PROFILE, SPREAD_PRESETS, bmr, checkWarnings, clampPace, coefFromPercents, correctTdee, dailyProtein, defaultPace, initialTdee, matchSpreadPreset, nearestActivity, paceBounds, paceInfo, paceOptions, spreadPercents, weekKcalOf, weightTrend } from './nutrition';
 
 const now = new Date(2026, 8, 26);
 
@@ -140,5 +140,24 @@ describe('活動量（v2：低い1.4／ふつう1.6／高い1.85）', () => {
     expect(nearestActivity(1.55).value).toBe(1.6);
     expect(nearestActivity(1.725).value).toBe(1.85);
     expect(nearestActivity(1.6).label).toBe('ふつう');
+  });
+});
+
+describe('paceInfo', () => {
+  it('減量: 70kg の選択肢が %/週 と一言になる', () => {
+    const o = paceOptions('cut', 70);
+    const infos = o.map((p) => paceInfo('cut', 70, p));
+    expect(infos.map((i) => i?.word)).toEqual(['ゆっくり', 'ふつう', 'ふつう', '速い']);
+    expect(infos[0]?.pct).toBe(0.5);
+    expect(infos[3]?.pct).toBe(1);
+  });
+  it('増量: 範囲の端で ゆっくり / 速い', () => {
+    expect(paceInfo('bulk', 80, 0.2)?.word).toBe('ゆっくり');
+    expect(paceInfo('bulk', 80, 0.4)?.word).toBe('速い');
+    expect(paceInfo('bulk', 80, 0.2)?.pct).toBe(0.3);
+  });
+  it('維持・体重0 は null', () => {
+    expect(paceInfo('maintain', 70, 0)).toBeNull();
+    expect(paceInfo('cut', 0, -0.5)).toBeNull();
   });
 });

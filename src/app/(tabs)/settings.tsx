@@ -5,6 +5,7 @@ import { Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTopInset } from '../../components/coach/Frames';
 import { Badge, Bar, Card, CardRow, Chip, InlineStepper, N, Notice, PrimaryButton, Segmented, Sheet, T, color, hairline, radius } from '@/design-system';
+import { PaceChoices } from '../../components/PaceChoices';
 import { AccountSheetsHost } from '../../components/AccountSheets';
 import { CoachBadge } from '../../components/coach/CoachBits';
 import { CoachModeSection } from '../../components/coach/CoachModeSection';
@@ -162,10 +163,8 @@ export default function SettingsScreen() {
             onPress={managed ? undefined : () => profile.goal !== 'maintain' && setPaceOpen(!paceOpen)}
           />
           {paceOpen && !managed && profile.goal !== 'maintain' && (
-            <View style={{ padding: 12, flexDirection: 'row', gap: 8, flexWrap: 'wrap', borderBottomWidth: hairline, borderBottomColor: color.line }}>
-              {opts.map((o) => (
-                <Chip key={o} label={`${o > 0 ? '+' : '−'}${Math.abs(o).toFixed(2)}`} selected={Math.abs(o - profile.pace) < 0.005} onPress={() => st.updateProfile({ pace: o }, w.weight)} />
-              ))}
+            <View style={{ padding: 12, borderBottomWidth: hairline, borderBottomColor: color.line }}>
+              <PaceChoices goal={profile.goal} weightKg={w.weight} options={opts} pace={profile.pace} onPick={(o) => st.updateProfile({ pace: o }, w.weight)} label={(o) => `${o > 0 ? '+' : '−'}${Math.abs(o).toFixed(2)}`} />
             </View>
           )}
           <CardRow

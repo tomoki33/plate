@@ -8,7 +8,7 @@ import { buildSystem } from '../supabase/functions/estimate-meal/prompt';
  *   --runs <n>        1件あたりの回数（既定 3。多数決ではなく、正解になった割合を見る）
  * 食品名の命中率（npm run eval:foods）は端末側の検索だけを測る。こちらは指示文の効果を測る。
  */
-type Case = { group: string; text: string; key?: string | null; maxItems?: number };
+type Case = { group: string; text: string; keys: (string | null)[] };
 type Result = { rate: number; hits: number; total: number; cases: Record<string, number> };
 
 const args = process.argv.slice(2);
@@ -50,8 +50,12 @@ async function ask(text: string): Promise<{ key: string | null; name: string }[]
 }
 
 const label = (c: Case) => `${c.group}: ${c.text}`;
-const pass = (c: Case, items: { key: string | null }[]) =>
-  c.maxItems !== undefined ? items.length >= 1 && items.length <= c.maxItems : c.key === null ? items.every((i) => i.key === null) : items.some((i) => i.key === c.key);
+// 返った品の key が、期待どおり（順不同・過不足なし）のときだけ正解。空の返答や余計な品は不正解
+const pass = (c: Case, items: { key: string | null }[]) => {
+  const a = items.map((i) => i.key ?? '').sort();
+  const e = c.keys.map((k) => k ?? '').sort();
+  return a.length === e.length && a.every((k, i) => k === e[i]);
+};
 
 const result: Result = { rate: 0, hits: 0, total: 0, cases: {} };
 const byGroup: Record<string, [number, number]> = {};

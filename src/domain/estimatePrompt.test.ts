@@ -14,8 +14,10 @@ describe('estimate-meal の指示文', () => {
     expect(p).toContain('迷ったら null');
     expect(p).toContain('料理を材料に分解しない');
     expect(p).toContain('タンドリーチキン');
+    expect(p).toContain('カタログにその料理そのものがあれば');
+    expect(p).toContain('カタログにその料理そのものがあれば');
   });
   it('評価データの正解 key はすべてカタログにある', () => {
-    for (const c of cases.cases as { key?: string | null }[]) if (c.key) expect(keys.has(c.key)).toBe(true);
+    for (const c of cases.cases as { keys: (string | null)[] }[]) for (const k of c.keys) if (k) expect(keys.has(k)).toBe(true);
   });
 });

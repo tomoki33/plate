@@ -1,136 +1,190 @@
 {
-  "_comment": "AI の指示文の評価用。key: null=カタログを選ばないのが正解 / 文字列=その key が正解。maxItems=返る品数の上限。一般的な料理名だけを置く（個人の記録は含めない）。",
+  "_comment": "AI の指示文の評価用。keys=返るべき品の key（順不同・過不足なし。null=カタログを選ばないのが正解）。一般的な料理名だけを置く（個人の記録は含めない）。",
   "cases": [
     {
       "group": "過剰一致",
       "text": "タンドリーチキン",
-      "key": null,
-      "note": "鶏もも肉などに当てない"
+      "note": "鶏もも肉などに当てない",
+      "keys": [
+        null
+      ]
     },
     {
       "group": "過剰一致",
       "text": "チキン南蛮",
-      "key": null
+      "keys": [
+        null
+      ]
     },
     {
       "group": "過剰一致",
       "text": "チキンカツ",
-      "key": null
+      "keys": [
+        null
+      ]
     },
     {
       "group": "過剰一致",
       "text": "鮭のムニエル",
-      "key": null
+      "keys": [
+        null
+      ]
     },
     {
       "group": "過剰一致",
       "text": "鶏肉のトマト煮",
-      "key": null
+      "keys": [
+        null
+      ]
     },
     {
       "group": "過剰一致",
       "text": "ささみチーズフライ",
-      "key": null
+      "keys": [
+        null
+      ]
     },
     {
       "group": "過剰一致",
       "text": "豚キムチ",
-      "key": null
+      "keys": [
+        null
+      ]
     },
     {
       "group": "過剰一致",
       "text": "サバの味噌煮",
-      "key": null
+      "keys": [
+        null
+      ]
     },
     {
       "group": "過剰一致",
       "text": "鶏の甘酢あん",
-      "key": null
+      "keys": [
+        null
+      ]
     },
     {
       "group": "過剰一致",
       "text": "ツナマヨおにぎり",
-      "key": null
+      "keys": [
+        null
+      ]
     },
     {
       "group": "命中",
       "text": "鶏むね肉（皮なし）を150g",
-      "key": "chicken_breast_skinless"
+      "keys": [
+        "chicken_breast_skinless"
+      ]
     },
     {
       "group": "命中",
       "text": "鶏もも肉 皮つき 200g",
-      "key": "chicken_thigh_skin"
+      "keys": [
+        "chicken_thigh_skin"
+      ]
     },
     {
       "group": "命中",
       "text": "ささみ 2本",
-      "key": "chicken_sasami"
+      "keys": [
+        "chicken_sasami"
+      ]
     },
     {
       "group": "命中",
       "text": "牛丼",
-      "key": "gyudon"
+      "keys": [
+        "gyudon"
+      ]
     },
     {
       "group": "命中",
       "text": "親子丼",
-      "key": "oyakodon"
+      "keys": [
+        "oyakodon"
+      ]
     },
     {
       "group": "命中",
       "text": "カレーライス",
-      "key": "curry_rice"
+      "keys": [
+        "curry_rice"
+      ]
     },
     {
       "group": "命中",
       "text": "唐揚げ 5個",
-      "key": "karaage"
+      "keys": [
+        "karaage"
+      ]
     },
     {
       "group": "命中",
       "text": "豚の生姜焼き",
-      "key": "shogayaki"
+      "keys": [
+        "shogayaki"
+      ]
     },
     {
       "group": "命中",
       "text": "ごはん 茶碗1杯",
-      "key": "rice"
+      "keys": [
+        "rice"
+      ]
     },
     {
       "group": "命中",
       "text": "納豆 1パック",
-      "key": "natto"
+      "keys": [
+        "natto"
+      ]
     },
     {
       "group": "命中",
       "text": "焼き鮭 1切れ",
-      "key": "salmon_grilled"
+      "keys": [
+        "salmon_grilled"
+      ]
     },
     {
       "group": "命中",
       "text": "ハンバーグ",
-      "key": "hamburg"
+      "keys": [
+        "hamburg"
+      ]
     },
     {
       "group": "料理は1品",
       "text": "ささみチーズフライ",
-      "maxItems": 1
+      "keys": [
+        null
+      ]
     },
     {
       "group": "料理は1品",
       "text": "チキン南蛮",
-      "maxItems": 1
+      "keys": [
+        null
+      ]
     },
     {
       "group": "料理は1品",
       "text": "カレーライス",
-      "maxItems": 1
+      "keys": [
+        "curry_rice"
+      ]
     },
     {
       "group": "料理は1品",
       "text": "ごはんと味噌汁と焼き鮭",
-      "maxItems": 3
+      "keys": [
+        "rice",
+        "miso_soup",
+        "salmon_grilled"
+      ]
     }
   ]
 }

@@ -115,7 +115,11 @@ function PaywallInner() {
         <View style={{ marginTop: 16 }}>
           <OutlineButton label={busy === 'restore' ? '確認中…' : '購入を復元する'} onPress={() => busy === null && void restore()} />
         </View>
-        {!billingConfigured() && <Notice tone="plain">課金の設定がまだ済んでいません（確認用に、下の開発用トグルで切り替えられます）。</Notice>}
+        {!billingConfigured() && (
+          <Notice tone="plain">
+            {__DEV__ ? '課金の設定がまだ済んでいません（確認用に、下の開発用トグルで切り替えられます）。' : '現在、購入はできません。しばらくしてからもう一度お試しください。'}
+          </Notice>
+        )}
         {msg && <T size={12} c={color.brandText} style={{ marginTop: 10 }}>{msg}</T>}
 
         <T size={11} c={color.sub} style={{ marginTop: 20, lineHeight: 17 }}>

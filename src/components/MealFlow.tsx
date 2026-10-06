@@ -93,6 +93,7 @@ export function MealFlow({ open, initialMode, onClose, remaining, todayKey, date
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 開いたとき・props が変わったときに、state を props に合わせる（意図した書き方。派生値への置き換えは挙動が変わるため見送り）
       setSlot(slotProp);
       setSlotOpen(false);
       setMode(initialMode);

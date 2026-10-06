@@ -37,9 +37,11 @@ export function WeightSheet({ open, onClose, initialDate, now }: { open: boolean
 
   // 開いたとき・日付を変えたときに、その日の値（なければ直近）にそろえる
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 開いたとき・props が変わったときに、state を props に合わせる（意図した書き方。派生値への置き換えは挙動が変わるため見送り）
     if (open) setDate(initialDate);
   }, [open, initialDate]);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 開いたとき・props が変わったときに、state を props に合わせる（意図した書き方。派生値への置き換えは挙動が変わるため見送り）
     if (open) setKg(weights[date] ?? latestBefore(date));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, date]);

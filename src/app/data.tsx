@@ -29,6 +29,7 @@ export default function DataScreen() {
     setLastBackup(signedIn ? await latestBackupAt() : null);
   };
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 開いたとき・props が変わったときに、state を props に合わせる（意図した書き方。派生値への置き換えは挙動が変わるため見送り）
     if (cloud) void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cloud, signedIn]);

@@ -2,7 +2,6 @@ import { useRouter } from 'expo-router';
 import * as Updates from 'expo-updates';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, Switch, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTopInset } from '../../components/coach/Frames';
 import { Badge, Bar, Card, CardRow, Chip, InlineStepper, N, Notice, PrimaryButton, Segmented, Sheet, T, color, hairline, radius } from '@/design-system';
 import { PaceChoices } from '../../components/PaceChoices';
@@ -31,7 +30,6 @@ const PLAN_JP = { view_only: '見るだけ', trial: '無料体験中', paid: '�
 const PROVIDER_JP: Record<string, string> = { apple: 'Apple', email: 'メール' };
 
 export default function SettingsScreen() {
-  const insets = useSafeAreaInsets();
   const topInset = useTopInset();
   const router = useRouter();
   const now = useNow();

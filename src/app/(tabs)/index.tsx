@@ -1,7 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Linking, Pressable, ScrollView, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TodayCoachBanners } from '../../components/coach/CoachBanners';
 import { useTopInset } from '../../components/coach/Frames';
 import { Badge, Bar, N, OutlineButton, PrimaryButton, Sheet, T, color, hairline, radius } from '@/design-system';
@@ -28,7 +27,6 @@ const MACROS: [string, Macro, string][] = [
 const sign = (n: number) => (n >= 0 ? '+' : '−');
 
 export default function TodayScreen() {
-  const insets = useSafeAreaInsets();
   const topInset = useTopInset();
   const router = useRouter();
   const now = useNow();
@@ -54,6 +52,7 @@ export default function TodayScreen() {
 
   useEffect(() => {
     if (meal) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 開いたとき・props が変わったときに、state を props に合わせる（意図した書き方。派生値への置き換えは挙動が変わるため見送り）
       setSel(null);
       setMode(0);
       setSheet('meal');

@@ -115,6 +115,7 @@
 
 ## E2. クラッシュ監視（Sentry、issue #4）
 - [ ] Sentry でプロジェクト（React Native）を作り、DSN・組織スラッグ・プロジェクト名を控える。設定 → Security & Privacy で **Prevent Storing of IP Addresses** をオン（データの保管地域も、作成時に選ぶ）
+- [ ] **Sentry を有効にするとき**: `eas.json` の production の `env.SENTRY_DISABLE_AUTO_UPLOAD`（ソースマップの自動アップロードを止めている。Sentry の組織が未設定だと Xcode ビルドが失敗するため）を外す。外す前に、下の `SENTRY_AUTH_TOKEN`・`SENTRY_ORG`・`SENTRY_PROJECT` を登録する
 - [ ] EAS に環境変数 `EXPO_PUBLIC_SENTRY_DSN`（production）、シークレット `SENTRY_AUTH_TOKEN`（Organization Auth Token。ソースマップのアップロード用）、`SENTRY_ORG`・`SENTRY_PROJECT` を登録（`app.json` の `@sentry/react-native` プラグインに `organization`・`project` を書いてもよい）
 - [ ] Sentry のアラートルール「新しい問題が出たらメール通知」を作る（完了条件「クラッシュが通知で届く」）
 - [ ] **新しい EAS ビルドが必要**（ネイティブモジュールが増えるため。OTA 更新では入らない）：`npx eas-cli@latest build --profile production --platform ios` → 審査提出

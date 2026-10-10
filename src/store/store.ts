@@ -12,7 +12,7 @@ import { signOut } from '../services/supabase';
 import { FREE_LAUNCH } from '../lib/flags';
 import { COACH_KV_KEYS, isManagedNow, useCoach } from './coachStore';
 import { startTrial as purchaseTrial } from '../services/billing';
-import { trackDayLogged, trackFirstTrainingCompleted, trackTrialStarted, type LoggedKind } from '../services/analytics';
+import { configureAnalytics, trackAppOpen, trackDayLogged, trackFirstTrainingCompleted, trackTrialStarted, type LoggedKind } from '../services/analytics';
 import { scaleMealEntry } from '../domain/meals';
 import { buildUsualGrams } from '../domain/usualGrams';
 import { uuid } from '../lib/id';
@@ -111,6 +111,8 @@ interface State {
   paceAnswers: Record<string, 'accepted' | 'dismissed'>;
   /** ヘルスケア連携（体重の自動取り込み）がオンか */
   healthSync: boolean;
+  /** 計測への同意（任意・既定はオフ）。オンのときだけ、端末ごとのランダムなID。オフは null */
+  analyticsId: string | null;
   /** 開発用：サンプルを自動で入れ済みか */
   sampleInserted: boolean;
   /** 「いつも通り」で入れる食事（時間帯 → マイセットのid。null は「なし」） */
@@ -162,6 +164,7 @@ interface State {
 
   // ヘルスケア連携
   setHealthSync(on: boolean): void;
+  setAnalyticsConsent(on: boolean): void;
   markSampleInserted(): void;
 
   // 体重・日タイプ
@@ -262,6 +265,7 @@ export const useStore = create<State>()((set, get) => {
     lastTargets: {},
     paceAnswers: {},
     healthSync: false,
+    analyticsId: null,
     sampleInserted: false,
     usualMeals: { 朝: null, 昼: null, 夜: null },
     session: null,
@@ -289,6 +293,7 @@ export const useStore = create<State>()((set, get) => {
       const d = await repo.loadAll();
       const dayTypes: Record<string, DayType> = {};
       for (const [k, v] of Object.entries(d.kv)) if (k.startsWith('dt:')) dayTypes[k.slice(3)] = v as DayType;
+      configureAnalytics(d.kv.analytics_consent === '1' && d.kv.analytics_id ? d.kv.analytics_id : null);
       set({
         ready: true,
         bootError: null,
@@ -316,6 +321,7 @@ export const useStore = create<State>()((set, get) => {
         lastTargets: d.lastTargets,
         paceAnswers: d.paceAnswers,
         healthSync: d.kv.health_sync === '1',
+        analyticsId: d.kv.analytics_consent === '1' && d.kv.analytics_id ? d.kv.analytics_id : null,
         sampleInserted: d.kv.sample_inserted === '1',
         usualMeals: Object.fromEntries(
           USUAL_SLOTS.map((sl) => {
@@ -655,6 +661,23 @@ export const useStore = create<State>()((set, get) => {
     setHealthSync(on) {
       set({ healthSync: on });
       persist(on ? repo.setKv('health_sync', '1') : repo.deleteKv('health_sync'));
+    },
+
+    setAnalyticsConsent(on) {
+      const id = on ? uuid() : null;
+      set({ analyticsId: id });
+      configureAnalytics(id);
+      if (id) {
+        // 同意の前に起きたこと（体験の開始）と今回の起動を、いま届ける。設定画面は初回の案内のあとでしか開けず、そのままでは体験の開始が届かない
+        const { trialStartedAt, firstOpenAt } = get();
+        if (firstOpenAt !== null) trackAppOpen(Math.max(0, Math.floor((Date.now() - firstOpenAt) / 86400000)));
+        if (trialStartedAt !== null) trackTrialStarted();
+        persist(repo.setKv('analytics_id', id));
+        persist(repo.setKv('analytics_consent', '1'));
+      } else {
+        persist(repo.deleteKv('analytics_id'));
+        persist(repo.deleteKv('analytics_consent'));
+      }
     },
 
     setDayType(date, t) {

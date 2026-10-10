@@ -13,7 +13,7 @@ vi.mock('../db/seed', () => ({ seedIfNeeded: vi.fn() }));
 vi.mock('../services/photos', () => ({ removeAllPhotos: vi.fn() }));
 vi.mock('../services/supabase', () => ({ signOut: vi.fn(), supabase: () => null }));
 vi.mock('../services/billing', () => ({ startTrial: vi.fn() }));
-vi.mock('../services/analytics', () => ({ trackDayLogged: vi.fn(), trackFirstTrainingCompleted: vi.fn(), trackTrialStarted: vi.fn() }));
+vi.mock('../services/analytics', () => ({ configureAnalytics: vi.fn(), trackAppOpen: vi.fn(), trackDayLogged: vi.fn(), trackFirstTrainingCompleted: vi.fn(), trackTrialStarted: vi.fn() }));
 vi.mock('../features/coach/api', () => ({}));
 vi.mock('../lib/id', () => ({ uuid: () => 'id' }));
 vi.mock('../lib/flags', () => ({ FREE_LAUNCH: false, COACH_MODE: true }));

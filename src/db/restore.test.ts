@@ -23,6 +23,18 @@ const payload = (tables: Record<string, unknown[]>, extra: Partial<BackupPayload
 const put = (t: SQLiteTable, rows: object | object[]) => db.insert(t).values(rows as never);
 const ids = async (t: typeof s.food | typeof s.bodyLog | typeof s.mealEntry) => (await db.select().from(t as never) as { id: string }[]).map((r) => r.id).sort();
 
+describe('計測のキーはバックアップに入れない', () => {
+  it('analytics_id / analytics_consent を除き、ほかの kv は残す', async () => {
+    await put(s.kv, [
+      { key: 'analytics_id', value: 'x', updatedAt: 1 },
+      { key: 'analytics_consent', value: '1', updatedAt: 1 },
+      { key: 'first_open_at', value: '5', updatedAt: 1 },
+    ]);
+    const p = await buildPayloadFrom(db, 1);
+    expect((p.tables.kv as { key: string }[]).map((r) => r.key)).toEqual(['first_open_at']);
+  });
+});
+
 describe('バックアップの対象テーブル', () => {
   it('schema の全テーブルが BACKUP_TABLES に入っている（テーブルを足したら、ここで気づく）', () => {
     const all = (Object.values(s) as unknown[]).filter((v) => is(v, SQLiteTable)).map((t) => getTableName(t as SQLiteTable)).sort();

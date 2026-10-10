@@ -46,11 +46,14 @@ export const MERGE_KEYS: readonly string[] = ['body_log', 'meal_entry'];
 /** トランザクションを張る関数（本番は expo-sqlite の withTransactionAsync、テストではメモリDBの BEGIN/COMMIT） */
 export type WithTransaction = (fn: () => Promise<void>) => Promise<void>;
 
+/** 計測の同意とIDは、アカウントのバックアップに入れない（アカウントと結び付けない約束のため。機種変更後は、あらためて選んでもらう） */
+const backupKv = <T extends { key: string }>(rows: T[]): T[] => rows.filter((r) => !r.key.startsWith('analytics_'));
+
 export async function buildPayloadFrom(db: Db, now = Date.now()): Promise<BackupPayload> {
   const tables: Record<string, unknown[]> = {};
   for (const { key, table } of BACKUP_TABLES) {
     const rows = (await db.select().from(table as never)) as { source?: string }[];
-    tables[key] = key === 'food' ? backupFoods(rows as { source: string }[]) : rows;
+    tables[key] = key === 'food' ? backupFoods(rows as { source: string }[]) : key === 'kv' ? backupKv(rows as { key: string }[]) : rows;
   }
   return { version: BACKUP_VERSION, createdAt: now, tables };
 }

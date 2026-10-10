@@ -121,9 +121,40 @@
 - [ ] 本番ビルドで一度だけテスト送信し、Sentry の画面で内容に記録・メール・ユーザーIDが入っていないことを確認する。**ネイティブのクラッシュ（例：テスト用に `Sentry.nativeCrash()` を一時的に呼ぶ）も1回送り、その内容も確認する**（ネイティブのクラッシュは `beforeSend` を通らず、ネイティブ SDK が直接送るため）
 - [ ] `docs/privacy-policy.md` と `web/legal.html` の更新（本 PR で反映済み）を、公開ページに反映する
 
-## F. 計測（公開直後から入れる。README_launch 5章）
-- [ ] 分析サービスを選ぶ（PostHog・Amplitude など）。`src/services/analytics.ts` の `send()` を差し替えるか、そのサービスの受け口を `EXPO_PUBLIC_ANALYTICS_ENDPOINT` に立てる
+## F. 計測（issue #23。公開直後から入れる。README_launch 5章）
+送り先は**既存の Supabase**（新しいサービス・アカウント・費用なし）。**任意の同意・既定はオフ**。設定 →「使われ方を送る（任意）」を本人がオンにしたときだけ、`analytics_events` テーブルに「追加だけ」できる。Supabase が未設定のビルドでは、設定の項目も出ない。
 - 送っているイベント：`app_open`（D7・D30のリテンション）、`day_logged`（週の記録日数。ざっくり・写真・文章も含む）、`trial_started`／`purchased`（体験から購入した割合）、`first_training_completed`（初めてトレーニングを完了するまでの日数）
+- 送る項目：端末ごとのランダムなID、イベント名、`daysSinceInstall`／`date`／`kind`／`product` だけ（許可リストは `src/services/analytics.ts` の `buildProps` とそのテスト、DB 側は CHECK 制約で担保）。食事・体重・写真・プロフィール・メール・ユーザーIDは送らない
+- [ ] （人間）Supabase に `supabase/migrations/20261006000000_analytics_events.sql` を適用する（`supabase db push`、または SQL Editor に貼って実行）。**本番の変更なので、内容を確認してから**
+- 計測の同意とIDはアカウントのバックアップに入れない（機種変更後は、あらためて選んでもらう）
+- [ ] （人間）新しい EAS ビルドで、設定の「使われ方を送る」をオンにして起動し、SQL Editor で `select * from analytics_events order by id desc limit 5;` に `app_open` が入ること、中身に記録・メール・ユーザーIDがないことを確認する。オフにして起動し直すと増えないことも確認
+- [ ] （人間）App Store Connect の「App のプライバシー」に、`docs/app-store-listing.md` のとおり「使用状況データ（製品の操作）・分析・ユーザーに紐づかない・トラッキングなし」を追加する
+- [ ] （人間）`docs/privacy-policy.md` と `web/legal.html` の更新（本 PR で反映済み）を、公開ページに反映する
+- 集計（SQL Editor で実行。管理者だけが読める）：
+```sql
+-- D7・D30（インストールから7日／30日たった端末だけを母数にする。インストール日は「最初のイベントの日 − daysSinceInstall」で推定）
+with d as (
+  select install_id,
+         min(created_at - ((props->>'daysSinceInstall')::int || ' days')::interval) as installed_at,
+         max((props->>'daysSinceInstall')::int) as max_days
+  from analytics_events where name = 'app_open' group by install_id)
+select count(*) filter (where installed_at <= now() - interval '7 days') as d7_cohort,
+       count(*) filter (where installed_at <= now() - interval '7 days' and max_days >= 7) * 1.0 / nullif(count(*) filter (where installed_at <= now() - interval '7 days'), 0) as d7_rate,
+       count(*) filter (where installed_at <= now() - interval '30 days') as d30_cohort,
+       count(*) filter (where installed_at <= now() - interval '30 days' and max_days >= 30) * 1.0 / nullif(count(*) filter (where installed_at <= now() - interval '30 days'), 0) as d30_rate
+from d;
+-- 週ごとの、記録した日数（端末ごとの平均）
+select week, avg(days) as avg_days_logged from (
+  select install_id, date_trunc('week', (props->>'date')::date) as week, count(distinct props->>'date') as days
+  from analytics_events where name = 'day_logged' group by 1, 2) t group by week order by week;
+-- 無料体験から購入までの割合
+select count(distinct install_id) filter (where name = 'purchased') * 1.0 / nullif(count(distinct install_id) filter (where name = 'trial_started'), 0) as trial_to_paid
+from analytics_events where name in ('trial_started', 'purchased');
+-- 初めてトレーニングを完了するまでの日数の中央値
+select percentile_cont(0.5) within group (order by (props->>'daysSinceInstall')::int) as median_days
+from analytics_events where name = 'first_training_completed';
+```
+- 注意：同意をオンにした時点で、その日の起動と（体験を始めていれば）体験の開始もあわせて届く。オンにする前の記録日は届かない。同意した人だけの数字なので、全体より偏る（記録を続ける人ほど同意しやすい）。傾向として見る
 
 ## G. 既知の制約
 - 購入・体験の判定は端末側（RevenueCatのSDK）で行う（AIの1日の上限だけサーバーでも最大値で止める）。厳密にするには RevenueCat の webhook が要る
